@@ -1,7 +1,8 @@
-﻿using System.ComponentModel;
+using System.ComponentModel;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.FindSymbols;
 using ModelContextProtocol.Server;
+using Morris.Roslynk.Infrastructure.Documentation;
 using Morris.Roslynk.Infrastructure.Lifecycle;
 using Morris.Roslynk.Infrastructure.Outlines;
 using Morris.Roslynk.Infrastructure.Projections;
@@ -28,6 +29,13 @@ public sealed class GetTypeHierarchyTool
 		Budget = responseBudget ?? ResponseBudget.Default;
 	}
 
+	[Description("""
+		SupportsPaging=Y
+
+		Returns base types (including metadata), implemented interfaces and known derived types.
+		Header: resolvedType. Body sections: base, interfaces, derived (empty sections omitted).
+		Entries: <typeKind>,<fully-qualified name>; typeKind=class|struct|interface|enum|delegate.
+		""")]
 	[McpServerTool(
 		Name = GetTypeHierarchyName,
 		Title = "Get a type's hierarchy",
@@ -35,32 +43,11 @@ public sealed class GetTypeHierarchyTool
 		Idempotent = true,
 		Destructive = false,
 		OpenWorld = false)]
-	[Description(
-		$"""
-		Returns a type's base-type chain, implemented interfaces, and known derived types, resolved by
-		fully-qualified name.
-		{OutlineDescriptions.ProjectionCoverage}
-		{OutlineDescriptions.CommonMethodInstructions}
-		The body has up to three sections (base, interfaces, derived); an empty section is omitted, and
-		each entry is a '<typeKind>,<fully-qualified name>':
-		  resolvedType=<fully-qualified type>
-
-		  base
-		  \t<typeKind>,<fully-qualified name>
-		  interfaces
-		  \t<typeKind>,<fully-qualified name>
-		  derived
-		  \t<typeKind>,<fully-qualified name>
-		where typeKind is class|struct|interface|enum|delegate; {OutlineDescriptions.ListFieldQuoting}.
-		{OutlineDescriptions.Paging} {OutlineDescriptions.ErrorBlock} Prefer this
-		over reading files to reconstruct a hierarchy; the chain comes from the compiler, including base types
-		defined in referenced assemblies.
-		""")]
 	public async Task<string> GetTypeHierarchy(
-		[Description("Solution handle returned by open_solution.")] string solutionId,
-		[Description($"Fully-qualified name of the type, e.g. 'MyNamespace.MyType'. {OutlineDescriptions.SymbolNameGrammar}")] string typeName,
-		[Description("1-based first item of the page; only pass it to continue from nextStartItem=. Default 1.")] int startItem = 1,
-		[Description("Page size in characters; an oversized result is returned as a page with count=/truncated=Y/nextStartItem=. Default: the response budget.")] int maxSize = 0)
+		[Description(ParameterDescriptions.SolutionId)] string solutionId,
+		[Description("Type name.")] string typeName,
+		[Description(ParameterDescriptions.StartItem)] int startItem = 1,
+		[Description(ParameterDescriptions.MaxSize)] int maxSize = 0)
 	{
 		RoslynInstance instance = await InstanceRegistry.GetOrBeginAsync(solutionId);
 		SolutionModel model = await instance.ReadModelAsync();

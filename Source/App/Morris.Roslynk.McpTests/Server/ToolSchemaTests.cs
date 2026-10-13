@@ -109,24 +109,62 @@ public class ToolSchemaTests : IClassFixture<ServerBuilder>
 	}
 
 	[Fact]
-	public void WhenTheImpactAnalysisHintsAreExpected_ThenMultiQueryAndFindReferencesDescriptionsCarryThem()
+	public void WhenToolsArePublished_ThenTheyPreserveTheirCurrentDescriptions()
 	{
-		// Issue #22: the roslynk skill steers impact/usage questions to multi_query, and the tool
-		// descriptions carry the same hint so clients without skill support (and subagents) see it too.
-		// Pinning the exact sentences makes a future reword a deliberate decision, not a silent drift.
-		Dictionary<string, string> descriptions = Tools
-			.ToDictionary(tool => tool.ProtocolTool.Name, tool => tool.ProtocolTool.Description ?? "", StringComparer.Ordinal);
+		Dictionary<string, MethodInfo> methods = ToolMethods()
+			.ToDictionary(item => item.ToolName, item => item.Method, StringComparer.Ordinal);
 
+		foreach (McpServerTool tool in Tools)
+		{
+			string? expected = methods[tool.ProtocolTool.Name]
+				.GetCustomAttribute<System.ComponentModel.DescriptionAttribute>()?.Description;
+			Assert.False(string.IsNullOrWhiteSpace(expected), $"Tool '{tool.ProtocolTool.Name}' has no description.");
+			Assert.Equal(expected, tool.ProtocolTool.Description);
+		}
+	}
+
+	[Fact]
+	public void WhenQueryGuidanceIsPublished_ThenDescriptionsCarryCurrentContracts()
+	{
 		string Normalize(string text) => string.Join(" ", text.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
 
+		string multiQuery = Tools.Single(tool => tool.ProtocolTool.Name == "multi_query").ProtocolTool.Description!;
 		Assert.Contains(
-			"For usage/impact questions, batch find_references, get_callers, get_callees, find_implementations and get_type_hierarchy in one call.",
-			Normalize(descriptions["multi_query"]),
+			"Operations cannot reference each other's output. Batch only queries needed for the question.",
+			Normalize(multiQuery),
 			StringComparison.Ordinal);
+
+		string findReferences = Tools.Single(tool => tool.ProtocolTool.Name == "find_references").ProtocolTool.Description!;
 		Assert.Contains(
-			"Prefer this over text search for usages in *.cs, *.cshtml and *.razor; combine with get_callers/find_implementations via multi_query for impact analysis.",
-			Normalize(descriptions["find_references"]),
+			"Combine with get_callers/get_callees/find_implementations/get_type_hierarchy via multi_query for usage/impact analysis.",
+			Normalize(findReferences),
 			StringComparison.Ordinal);
+	}
+
+	[Fact]
+	public void WhenServerIsConfigured_ThenInstructionsCarrySharedLibraryGuidance()
+	{
+		Type registration = typeof(Morris.Roslynk.Mcp.Hosting.StdioBridge).Assembly
+			.GetType("Morris.Roslynk.Mcp.McpServerRegistration", throwOnError: true)!;
+		var options = new McpServerOptions();
+		registration.GetMethod("Configure", BindingFlags.Public | BindingFlags.Static)!
+			.Invoke(null, [options]);
+
+		Assert.False(string.IsNullOrWhiteSpace(options.ServerInstructions));
+		foreach (string section in new[]
+		{
+			"Scope", "Lifecycle", "Output protocol", "Parameters", "Name grammar", "Conditional coverage",
+			"Failures and freshness", "Paging", "Reads and writes", "Batching", "Editing and diagnostics", "Razor"
+		})
+			Assert.Contains("## " + section, options.ServerInstructions, StringComparison.Ordinal);
+
+		Assert.Contains("saving failures trigger attempted rollback, which may fail", options.ServerInstructions, StringComparison.Ordinal);
+		foreach (McpServerTool tool in Tools)
+		{
+			Assert.DoesNotContain("## Shared paging protocol", tool.ProtocolTool.Description!, StringComparison.Ordinal);
+			Assert.DoesNotContain("## Name grammar", tool.ProtocolTool.Description!, StringComparison.Ordinal);
+			Assert.DoesNotContain("## Output protocol", tool.ProtocolTool.Description!, StringComparison.Ordinal);
+		}
 	}
 
 	[Fact]
@@ -171,8 +209,8 @@ public class ToolSchemaTests : IClassFixture<ServerBuilder>
 		IReadOnlyDictionary<string, JsonElement> properties = Properties(schema);
 		IReadOnlyCollection<string> required = Required(schema);
 
-		// The paging parameters are plain omittable integers - their defaults live in the descriptions, the
-		// MoveDefaultKeywordToDescription transform having stripped the schema's default keyword.
+		// The paging parameters are plain omittable integers - the MoveDefaultKeywordToDescription
+		// transform stripped the schema's default keyword and moved each default into the description.
 		foreach (string name in new[] { "startItem", "maxSize", "part" })
 		{
 			Assert.True(properties.ContainsKey(name), $"{name} is missing from the get_symbol_body schema.");
@@ -180,9 +218,9 @@ public class ToolSchemaTests : IClassFixture<ServerBuilder>
 			Assert.DoesNotContain(name, required);
 		}
 
-		Assert.Contains("Default: the response budget", properties["maxSize"].GetProperty("description").GetString(), StringComparison.Ordinal);
-		Assert.Contains("Default 1", properties["startItem"].GetProperty("description").GetString(), StringComparison.Ordinal);
-		Assert.Contains("Default 0", properties["part"].GetProperty("description").GetString(), StringComparison.Ordinal);
+		Assert.Contains("Default: 0", properties["maxSize"].GetProperty("description").GetString(), StringComparison.Ordinal);
+		Assert.Contains("Default: 1", properties["startItem"].GetProperty("description").GetString(), StringComparison.Ordinal);
+		Assert.Contains("Default: 0", properties["part"].GetProperty("description").GetString(), StringComparison.Ordinal);
 	}
 
 	[Fact]

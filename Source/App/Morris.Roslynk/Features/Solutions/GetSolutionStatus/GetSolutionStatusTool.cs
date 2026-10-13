@@ -23,6 +23,14 @@ public sealed class GetSolutionStatusTool
 		InstanceRegistry = instanceRegistry ?? throw new ArgumentNullException(nameof(instanceRegistry));
 	}
 
+	[Description("""
+		Lists loaded solutions: <solutionId>,<status>,<loaded>/<total>.
+		loaded tracks Building progress; total='?' until known after initial loading.
+
+		Ready solutions add indented loadDiagnostic=<message> for analyzer/generator load failures,
+		project evaluation failures or missing SDKs, which may explain compiler errors.
+		Other states omit messages. Up to 20 per solution, then loadDiagnosticsTruncated=<n>.
+		""")]
 	[McpServerTool(
 		Name = GetSolutionStatusName,
 		Title = "Get loaded-solution status",
@@ -30,22 +38,8 @@ public sealed class GetSolutionStatusTool
 		Idempotent = true,
 		Destructive = false,
 		OpenWorld = false)]
-	[Description(
-		$"""
-		Lists the solutions currently loaded by the server. Returns a compact text result, not JSON: a
-		blank line, then one line per solution
-		'<solutionId>,<status>,<loaded>/<total>' where loaded is how many projects have loaded so
-		far (a live count while still Building) and total is the count once known ('?' until the first load
-		finishes). A solution whose load reported messages (a skipped or unloadable analyzer or generator,
-		a project that failed to evaluate, an SDK that was not found; often the cause of confusing compiler
-		errors) is, once it is Ready (never while Building, Updating or Faulted), followed by one indented 'loadDiagnostic=<message>' line per message, so a solution with
-		none stays a single line. At most {MaxLoadDiagnosticsText} messages are listed per solution, then an
-		indented 'loadDiagnosticsTruncated=<n>' line counts the rest; pass allLoadDiagnostics=true to list
-		every message.
-		{OutlineDescriptions.Freshness}
-		""")]
 	public string GetSolutionStatus(
-		[Description("Optional. true lists every load diagnostic message of every solution instead of the first " + MaxLoadDiagnosticsText + " per solution. Default false.")] bool allLoadDiagnostics = false)
+		[Description("Include all load diagnostics.")] bool allLoadDiagnostics = false)
 	{
 		List<RoslynInstance> instances = InstanceRegistry.LoadedInstances().ToList();
 		int? messageLimit = allLoadDiagnostics ? null : MaxLoadDiagnostics;

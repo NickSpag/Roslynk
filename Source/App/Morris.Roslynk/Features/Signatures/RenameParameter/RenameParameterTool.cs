@@ -5,6 +5,7 @@ using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.FindSymbols;
 using ModelContextProtocol.Server;
+using Morris.Roslynk.Infrastructure.Documentation;
 using Morris.Roslynk.Infrastructure.Lifecycle;
 using Morris.Roslynk.Infrastructure.Outlines;
 using Morris.Roslynk.Infrastructure.Projections;
@@ -35,6 +36,26 @@ public sealed class RenameParameterTool
 		ApplyPipeline = applyPipeline ?? throw new ArgumentNullException(nameof(applyPipeline));
 	}
 
+	[Description("""
+		Renames one method/local function/constructor/indexer overload's parameter, updating declaration,
+		body uses, named call arguments and <paramref> docs. Strings/comments/unrelated text are unchanged.
+
+		Cascades through overrides, interfaces/implementations and partial-method parts when a source
+		parameter at the same position has the old name. Other names, metadata and generated-only
+		related declarations remain unchanged, listed in unchangedRelated.
+
+		Additional headers: resolvedMethod (pre-rename member), parameter (old name), renamedMembers
+		(declaration count including target), unchangedRelated (semicolon-separated; omitted if empty).
+
+		Errors:
+		- Invalid: invalid identifier or newName=parameterName.
+		- Ambiguous methodId: overload candidates; no match gives fuzzy suggestions.
+		- NotFound: absent parameterName; lists parameters.
+		- Conflict: newName clashes with a parameter, local, local function, lambda/query variable or
+		  type parameter in a renamed declaration.
+		- NotSupported: unsupported target kind, positional record parameter, metadata-only or
+		  generated-only target (names generator).
+		""")]
 	[McpServerTool(
 		Name = RenameParameterName,
 		Title = "Rename a method parameter",
@@ -42,39 +63,12 @@ public sealed class RenameParameterTool
 		Idempotent = false,
 		Destructive = true,
 		OpenWorld = false)]
-	[Description(
-		$"""
-		Renames one parameter of one method, local function, constructor or indexer overload using Roslyn's semantic rename:
-		the declaration, every use in the body, named arguments at call sites and <paramref> documentation
-		references are updated; string literals, comments and same-named text elsewhere are left untouched.
-		The rename cascades across the member's override/interface group — overridden and overriding members,
-		interface members and their implementations, and both parts of a partial method — wherever the related
-		declaration is in source and its parameter at the same position has the same old name. Related
-		declarations that use a different name, that live in metadata, or that are declared only by a source
-		generator are left as they are and reported in
-		'unchangedRelated'. {OutlineDescriptions.ProjectionCoverage}
-		Returns a text result, not JSON: 'applied' (N for a checkOnly preview), 'resolvedMethod' (the member
-		as resolved, before the rename), 'parameter' (the old name), 'renamedMembers' (how many declarations
-		had the parameter renamed, including the target), 'unchangedRelated' (semicolon-separated related
-		members left alone; omitted when there are none), 'status' header, a blank line, then one
-		solution-relative changed-file path per line. {OutlineDescriptions.Project} {OutlineDescriptions.Freshness}
-		Errors: an invalid identifier, or a newName equal to parameterName, is error=Invalid; an ambiguous
-		methodId returns one candidate= line per overload and a methodId that matches nothing returns fuzzy
-		suggestions (copy a candidate back verbatim); a parameterName the member does not declare is
-		error=NotFound listing its parameters; a newName already used by another parameter, local, local
-		function, lambda/query variable or type parameter inside a renamed declaration is error=Conflict naming
-		a symbol that is not a method, local function, constructor or indexer, a positional record parameter, a
-		member declared only in metadata, or a member declared only by a source generator is error=NotSupported
-		(naming the generator in the last case); a file edited on disk since it was loaded is
-		error=Stale. Nothing is written in any failure case. Pass checkOnly to preview the files that would
-		change without writing.
-		""")]
 	public async Task<string> RenameParameter(
-		[Description("Solution handle returned by open_solution.")] string solutionId,
-		[Description($"Fully-qualified name of the method, local function, constructor or indexer that declares the parameter. {OutlineDescriptions.SymbolNameGrammar}")] string methodId,
-		[Description("The parameter's current name.")] string parameterName,
-		[Description("The new name (must be a valid C# identifier).")] string newName,
-		[Description("If true, returns the files that would change without writing anything.")] bool checkOnly = false,
+		[Description(ParameterDescriptions.SolutionId)] string solutionId,
+		[Description("Declaring method/local function/constructor/indexer name.")] string methodId,
+		[Description("Current parameter name.")] string parameterName,
+		[Description("New C# identifier.")] string newName,
+		[Description(ParameterDescriptions.CheckOnly)] bool checkOnly = false,
 		CancellationToken cancellationToken = default)
 	{
 		RoslynInstance instance = await InstanceRegistry.GetOrBeginAsync(solutionId);

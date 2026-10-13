@@ -1,6 +1,7 @@
-﻿using System.ComponentModel;
+using System.ComponentModel;
 using Microsoft.CodeAnalysis;
 using ModelContextProtocol.Server;
+using Morris.Roslynk.Infrastructure.Documentation;
 using Morris.Roslynk.Infrastructure.Lifecycle;
 using Morris.Roslynk.Infrastructure.Outlines;
 using Morris.Roslynk.Infrastructure.Projections;
@@ -27,6 +28,11 @@ public sealed class FindDefinitionTool
 		ProjectionService = projectionService ?? throw new ArgumentNullException(nameof(projectionService));
 	}
 
+	[Description("""
+		Resolves the symbol at a source position. Returns fullName (including method/indexer parameter
+		types) and kind; source symbols add project, path and loc, metadata symbols add assembly.
+		No binding in any projection returns NotFound.
+		""")]
 	[McpServerTool(
 		Name = FindDefinitionName,
 		Title = "Find a symbol's definition",
@@ -34,24 +40,11 @@ public sealed class FindDefinitionTool
 		Idempotent = true,
 		Destructive = false,
 		OpenWorld = false)]
-	[Description(
-		$"""
-		Resolves the symbol used at a source position (file, 1-based line and column) and returns where it is
-		declared; the 'go to definition' jump, by position.
-		{OutlineDescriptions.ProjectionCoverage}
-		{OutlineDescriptions.CommonMethodInstructions}
-		The result is a '#fullName' (parameter types included for a method or indexer, so it can be passed
-		straight to the name-based tools), '#kind' header plus '#project=<project>', '#path=<relative/path.cs>' and '#loc=<line:col>' for a source symbol,
-		or '#assembly=<name>' for a metadata symbol. {OutlineDescriptions.Project} {OutlineDescriptions.GeneratedLocations} A position that binds to no
-		symbol in any projection is error=NotFound. {OutlineDescriptions.ErrorBlock} Prefer this over grepping
-		to chase a definition; it follows the compiler's binding, so it lands on the right symbol even when
-		names are overloaded or shadowed.
-		""")]
 	public async Task<string> FindDefinition(
-		[Description("Solution handle returned by open_solution.")] string solutionId,
-		[Description("Path to the .cs file containing the usage; absolute, or relative to the solution folder.")] string filePath,
-		[Description("1-based line of the usage.")] int line,
-		[Description("1-based column of the usage.")] int column)
+		[Description(ParameterDescriptions.SolutionId)] string solutionId,
+		[Description("Usage's .cs file path.")] string filePath,
+		[Description("Usage line.")] int line,
+		[Description("Usage column.")] int column)
 	{
 		RoslynInstance instance = await InstanceRegistry.GetOrBeginAsync(solutionId);
 		SolutionModel model = await instance.ReadModelAsync();

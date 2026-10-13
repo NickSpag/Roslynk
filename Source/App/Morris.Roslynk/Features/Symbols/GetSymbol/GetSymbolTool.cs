@@ -1,8 +1,9 @@
-﻿using System.ComponentModel;
+using System.ComponentModel;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.Text;
 using ModelContextProtocol.Server;
+using Morris.Roslynk.Infrastructure.Documentation;
 using Morris.Roslynk.Infrastructure.Lifecycle;
 using Morris.Roslynk.Infrastructure.Outlines;
 using Morris.Roslynk.Infrastructure.Projections;
@@ -29,6 +30,11 @@ public sealed class GetSymbolTool
 		ProjectionService = projectionService ?? throw new ArgumentNullException(nameof(projectionService));
 	}
 
+	[Description("""
+		Returns a symbol's declaration without implementation. Source results: project, path and loc
+		headers, then the verbatim declaration before its opening brace or '=>'.
+		Without source: source=metadata, kind, signature and assembly headers.
+		""")]
 	[McpServerTool(
 		Name = GetSymbolName,
 		Title = "Get symbol details",
@@ -36,26 +42,9 @@ public sealed class GetSymbolTool
 		Idempotent = true,
 		Destructive = false,
 		OpenWorld = false)]
-	[Description(
-		$"""
-		Returns a symbol's declaration, resolved by fully-qualified name.
-		{OutlineDescriptions.ProjectionCoverage}
-		{OutlineDescriptions.CommonMethodInstructions}
-		A single source match returns a '#project=<project>', '#path=<relative/path.cs>' and
-		'#loc=<startLine:startCol-endLine:endCol>' header, a blank line, then the verbatim declaration cut
-		before its body (the opening brace or '=>'). The declaration line itself conveys accessibility, kind,
-		return type, name and parameters, so those are not repeated. Example:
-		  #project=VendmanagerWeb
-		  #path=VendmanagerWeb/Components/Pages/Ops/TaskManager/TaskManager.razor.cs
-		  #loc=196:5-214:6
-
-		  private Task Search(CancellationToken cancellationToken)
-		A metadata symbol (no source) instead returns '#source=metadata', '#kind', '#signature', '#assembly'.
-		{OutlineDescriptions.Project} {OutlineDescriptions.GeneratedLocations} {OutlineDescriptions.ErrorBlock} Prefer this over reading the file to identify a symbol.
-		""")]
 	public async Task<string> GetSymbol(
-		[Description("Solution handle returned by open_solution.")] string solutionId,
-		[Description($"Fully-qualified name of the symbol, e.g. 'MyNamespace.MyType' or 'MyNamespace.MyType.MyMethod'. {OutlineDescriptions.SymbolNameGrammar}")] string symbolName,
+		[Description(ParameterDescriptions.SolutionId)] string solutionId,
+		[Description("Symbol name.")] string symbolName,
 		CancellationToken cancellationToken = default)
 	{
 		RoslynInstance instance = await InstanceRegistry.GetOrBeginAsync(solutionId);

@@ -2,6 +2,7 @@ using System.ComponentModel;
 using Microsoft.CodeAnalysis;
 using ModelContextProtocol.Server;
 using Morris.Roslynk.Infrastructure.Callers;
+using Morris.Roslynk.Infrastructure.Documentation;
 using Morris.Roslynk.Infrastructure.Lifecycle;
 using Morris.Roslynk.Infrastructure.Outlines;
 using Morris.Roslynk.Infrastructure.Projections;
@@ -29,6 +30,24 @@ public sealed class GetCalleesTool
 		Budget = responseBudget ?? ResponseBudget.Default;
 	}
 
+	[Description("""
+		SupportsPaging=Y
+
+		Lists methods, constructors, property/event accessors and operators called by a member.
+		Property reads/writes name their accessors (compound/increment reports both); e += h names
+		the add accessor. A property includes its accessors; a field includes its initializer;
+		constructors include initializers they run. Includes user-defined operators/conversions,
+		using's Dispose, delegate method groups, nested lambdas and local functions. Abstract/interface
+		declarations and auto-properties without code call nothing.
+
+		Implicit foreach (GetEnumerator, MoveNext, Current) and await (GetAwaiter, IsCompleted, GetResult)
+		calls are excluded; get_callers includes them. Explicit calls remain included.
+
+		Solution callees nest project > folder > file > namespace > type; metadata callees appear
+		under <external:AssemblyName> with empty loc. Leaves: <memberKind>,<memberName>,<loc>, plus
+		parameterTypes only for overloads declared in the callee's type (parameterless overload: '()'). Constructed generics collapse to their definitions; extension
+		methods include their 'this' parameter.
+		""")]
 	[McpServerTool(
 		Name = GetCalleesName,
 		Title = "Get the members a member calls",
@@ -36,52 +55,12 @@ public sealed class GetCalleesTool
 		Idempotent = true,
 		Destructive = false,
 		OpenWorld = false)]
-	[Description(
-		$"""
-		Finds the methods, constructors, property or event accessors and operators that the resolved member's
-		code calls (by fully-qualified name) - the inverse of get_callers, answering "what does this call?".
-		{OutlineDescriptions.ProjectionCoverage}
-		{OutlineDescriptions.CommonMethodInstructions}
-		Callees in the solution are grouped like get_callers; callees declared in a referenced assembly (BCL,
-		NuGet) are grouped under one top-level '<external:AssemblyName>' line per assembly instead of a project:
-		  resolvedSymbol=<name, parameter types included for a method or indexer>
-
-		  <external:AssemblyName>
-		  \t<namespace>
-		  \t\t<typeKind>,<typeName>
-		  \t\t\t<memberKind>,<memberName>,<empty loc>[,<parameterTypes>]
-		  <project>
-		  \t<relative/forward-slash/folder>
-		  \t\t<file.cs|file.razor>
-		  \t\t\t<namespace>
-		  \t\t\t\t<typeKind>,<typeName>
-		  \t\t\t\t\t<memberKind>,<memberName>,<loc>[,<parameterTypes>]
-		where kind is one of {OutlineDescriptions.KindList} and {OutlineDescriptions.Loc}; {OutlineDescriptions.ListFieldQuoting}.
-		An external callee's loc field is present but empty. parameterTypes appears only when the callee's type
-		declares more than one method of that name (inherited overloads do not count): the declared parameter
-		types, pipe-delimited, without ref/out/in, or '()' for the parameterless overload.
-		Each callee is reported as declared: generic instantiations (List<int>.Add, To<string>) collapse to the
-		generic definition, and an extension method lists its 'this' parameter.
-		The member may be a method, constructor, operator, property, indexer, event or field. A property read or
-		write names the accessor that runs (get or set; a compound assignment or increment reads and writes, so
-		both appear), and 'e += h' names the event's add accessor. User-defined operators and conversions, the
-		Dispose a using runs, and a method group passed as a delegate are included. The plumbing the compiler
-		inserts for foreach (GetEnumerator, MoveNext, Current) and await (GetAwaiter, IsCompleted, GetResult)
-		is not; an explicit .GetAwaiter() call is.
-		A constructor also reports the calls in the field and property initializers it runs. A property is its
-		accessors, a field its initializer. Lambdas and local functions declared inside the member belong to
-		it. A member with no code in the solution (an abstract or interface declaration, an auto-property)
-		calls nothing.
-		{OutlineDescriptions.Paging} {OutlineDescriptions.Project} {OutlineDescriptions.GeneratedLocations} {OutlineDescriptions.FilePathSplit} {OutlineDescriptions.ErrorBlock} Prefer this over reading the body and tracing each
-		call by eye: the compiler's operation model binds every call to the overload that actually runs.
-		"""
-	)]
 	public async Task<string> GetCallees(
-		[Description("Solution handle returned by open_solution.")] string solutionId,
-		[Description($"Fully-qualified name of the member whose calls are listed, e.g. 'MyNamespace.MyType.MyMethod'. {OutlineDescriptions.SymbolNameGrammar}")] string memberName,
-		[Description("Leave out callees declared in referenced assemblies (BCL, NuGet), listing only the solution's own members.")] bool excludeExternal = false,
-		[Description("1-based first item of the page; only pass it to continue from nextStartItem=. Default 1.")] int startItem = 1,
-		[Description("Page size in characters; an oversized result is returned as a page with count=/truncated=Y/nextStartItem=. Default: the response budget.")] int maxSize = 0)
+		[Description(ParameterDescriptions.SolutionId)] string solutionId,
+		[Description("Member name.")] string memberName,
+		[Description("Exclude metadata callees (BCL/NuGet).")] bool excludeExternal = false,
+		[Description(ParameterDescriptions.StartItem)] int startItem = 1,
+		[Description(ParameterDescriptions.MaxSize)] int maxSize = 0)
 	{
 		RoslynInstance instance = await InstanceRegistry.GetOrBeginAsync(solutionId);
 		SolutionModel model = await instance.ReadModelAsync();

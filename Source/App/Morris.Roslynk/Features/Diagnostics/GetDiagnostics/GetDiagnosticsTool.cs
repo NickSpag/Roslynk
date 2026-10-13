@@ -3,6 +3,7 @@ using Microsoft.CodeAnalysis;
 using ModelContextProtocol.Server;
 using Morris.Roslynk.Infrastructure.CodeActions;
 using Morris.Roslynk.Infrastructure.Diagnostics;
+using Morris.Roslynk.Infrastructure.Documentation;
 using Morris.Roslynk.Infrastructure.Lifecycle;
 using Morris.Roslynk.Infrastructure.Outlines;
 using Morris.Roslynk.Infrastructure.Razor;
@@ -29,6 +30,21 @@ public sealed class GetDiagnosticsTool
 		Budget = responseBudget ?? ResponseBudget.Default;
 	}
 
+	[Description("""
+		SupportsPaging=Y
+
+		Returns compiler/analyzer diagnostics.
+
+		errors/warnings/infos/hidden count all content-filtered severities regardless of include flags.
+		The body lists flagged severities; summaryOnly summarizes all if none are flagged, otherwise
+		only flagged ones. Details: project > folder > file > severity; leaves: <id>,<line:col>,<message>.
+		Summary: <id>,<count>,<project>,<path>,<line:col>,<message> per id, ordered by count descending then id.
+
+		projectName/filePath/ids filter after compilation, reusing cached results; active filters echo
+		filter=<parameter>:<value>. Empty filtered results do not prove the solution clean.
+		Unknown project/file returns NotFound with candidates. Known matches without diagnostics return zeros.
+		Private fixer-trigger IDs are omitted; fix the public rule instead (e.g. IDE0005).
+		""")]
 	[McpServerTool(
 		Name = GetDiagnosticsName,
 		Title = "Get compiler diagnostics",
@@ -36,59 +52,20 @@ public sealed class GetDiagnosticsTool
 		Idempotent = true,
 		Destructive = false,
 		OpenWorld = false)]
-	[Description(
-		$"""
-		Returns diagnostics for an opened solution.
-		Costly: it compiles and analyzes every project the edits since the last call affect, which takes seconds on a
-		large solution. Make all the edits a task needs first and call this once at the end, not after every edit; a
-		repeat call with nothing changed in between is near-instant.
-		{OutlineDescriptions.CommonMethodInstructions}
-		Per-severity counts are always in the header so filtering is never silent; diagnostics nest file -> severity:
-		  errors=<n>
-		  warnings=<n>
-		  infos=<n>
-		  hidden=<n>
-
-		  <project>
-		  \t<relative/forward-slash/folder>
-		  \t\t<file.cs|file.razor>
-		  \t\t\t<severity>
-		  \t\t\t\t<id>,<line:col>,<message>
-		where severity is the plural group errors|warnings|infos|hidden and the free-text message is last.
-		Set includeErrors, includeWarnings, includeInfo, or includeHidden to include the actual details (all default false).
-		Analyzers (NetAnalyzers / IDE rules) run by default; set includeAnalyzers false for a faster compiler-only pass.
-		Optional filters narrow the result after compilation (so a filtered call reuses the cached result and recompiles
-		nothing) and combine: projectName (exactly as the outline prints the project - the project file name with a
-		.csproj extension omitted, others such as .vbproj kept; it matches every loaded target framework of a
-		multi-targeted project), filePath (absolute or relative to the solution folder, like find_definition; a
-		.razor/.cshtml path also matches the diagnostics reported against it), ids (e.g. ["CS0246","CS0103"],
-		case-insensitive), maxResults, and summaryOnly. With summaryOnly=true the body is one line per id instead:
-		<id>,<count>,<project>,<path>,<line:col>,<message>, ordered by count descending, carrying the count, one example
-		location and that example's message; it covers every severity unless an include flag is set. Counts describe the
-		FILTERED set, and every active filter is echoed as a filter=<parameter>:<value> header before them - an empty
-		body with a filter= header means the filter matched nothing, not that the solution is clean. A projectName or
-		filePath that is not in the solution is error=NotFound with candidate= values; one that exists but has no
-		diagnostics returns zero counts. {OutlineDescriptions.Project} {OutlineDescriptions.FilePathSplit} {OutlineDescriptions.Paging} {OutlineDescriptions.ErrorBlock} Prefer this over reading files to hunt for problems, and over running
-		`dotnet build`; it returns the compiler's and analyzers' own diagnostics with exact locations.
-		Multi-targeted projects report diagnostics across their loaded target frameworks. The Razor compiler's own
-		diagnostics (RZxxxx, e.g. an unclosed @code block) are reported against the .razor/.cshtml file. Diagnostic
-		ids that exist only to trigger a code fix (they carry no message and accompany a public rule, as IDE0005's
-		does) are not listed - fix the public id instead.
-		""")]
 	public async Task<string> GetDiagnostics(
-		[Description("Solution handle returned by open_solution.")] string solutionId,
-		[Description("Include error-severity diagnostics.")] bool includeErrors = false,
-		[Description("Include warning-severity diagnostics.")] bool includeWarnings = false,
-		[Description("Include info-severity diagnostics.")] bool includeInfo = false,
-		[Description("Include hidden-severity diagnostics.")] bool includeHidden = false,
-		[Description("Run the project's analyzers (NetAnalyzers / IDE rules) for a richer result; set false for a faster compiler-only pass.")] bool includeAnalyzers = true,
-		[Description("Only diagnostics from this project: the name exactly as the outline prints it (the project file name; the .csproj extension is omitted, other extensions such as .vbproj are kept) or that name carrying its extension. Case-insensitive. A multi-targeted project is matched across every loaded target framework.")] string? projectName = null,
-		[Description("Only diagnostics located in this file: absolute, or relative to the solution folder (the same spellings find_definition accepts). A .razor/.cshtml path also matches the diagnostics reported against it. Case-insensitive.")] string? filePath = null,
-		[Description("Only these diagnostic ids, e.g. [\"CS0246\",\"CS0103\"]; case-insensitive. Omit, or pass an empty list, for every id.")] string[]? ids = null,
-		[Description($"Optional cap on the entries listed in the body (id lines when summaryOnly is set); the per-severity header counts stay complete. Omit it to page through everything with startItem. {OutlineDescriptions.Truncation}")] int? maxResults = null,
-		[Description("Optional. true lists one line per diagnostic id (its count, one example location and the example message) instead of every diagnostic, ordered by count descending then id; it covers every severity unless an include flag is set. Default false.")] bool summaryOnly = false,
-		[Description("1-based first item of the page; only pass it to continue from nextStartItem=. Default 1.")] int startItem = 1,
-		[Description("Page size in characters; an oversized result is returned as a page with count=/truncated=Y/nextStartItem=. Default: the response budget.")] int maxSize = 0)
+		[Description(ParameterDescriptions.SolutionId)] string solutionId,
+		[Description("List errors.")] bool includeErrors = false,
+		[Description("List warnings.")] bool includeWarnings = false,
+		[Description("List info diagnostics.")] bool includeInfo = false,
+		[Description("List hidden diagnostics.")] bool includeHidden = false,
+		[Description("Run analyzers; false is faster, compiler-only.")] bool includeAnalyzers = true,
+		[Description("Project filter: outline name with optional extension, case-insensitive; all loaded target frameworks.")] string? projectName = null,
+		[Description("File filter (case-insensitive), including diagnostics mapped to Razor source.")] string? filePath = null,
+		[Description("Diagnostic ids (case-insensitive), e.g. [\"CS0246\"]; null/empty matches all.")] string[]? ids = null,
+		[Description("Body-entry cap (ids with summaryOnly). Capped bodies report count=<listed>, truncated=Y.")] int? maxResults = null,
+		[Description("Summarize by diagnostic id.")] bool summaryOnly = false,
+		[Description(ParameterDescriptions.StartItem)] int startItem = 1,
+		[Description(ParameterDescriptions.MaxSize)] int maxSize = 0)
 	{
 		RoslynInstance instance = await InstanceRegistry.GetOrBeginAsync(solutionId);
 		SolutionModel model = await instance.ReadModelAsync();

@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- Server instructions route diffs and line-range reads, including PR diff locations, to standard file tools (Fixes #100)
+- Published parameter default suffixes use `Default: ...`, preserving values and optionality (Fixes #100)
+- Tool and parameter descriptions are shortened; shared parameter, write-result and access-kind contracts live in server instructions, with explicit startItem continuation syntax (Fixes #100)
+- Published tool prose and shared server instructions are ~10% smaller overall (shared instructions -19%; no tool description longer than before except `apply_patch`'s corrected `documentVersion` contract), with no contract, schema, parameter, default or annotation changes (Fixes #100)
+- Obsolete `#`-prefixed header examples in `get_symbol`, `find_definition`, `find_dead_conditionals` and the shared output wording now match the unprefixed keys `OutlineBuilder` emits; `get_members`/`get_type_hierarchy` type-name guidance no longer suggests parameter lists; `get_diagnostics` documents its exact severity-flag interaction; `apply_patch` documents its SHA-256 `documentVersion` contract (no read tool emits it yet) (Fixes #100)
+- `multi_query` no longer hand-enumerates its supported operations (the schema enum is authoritative; the prose list had drifted to 13 names while the catalog has 15), and its `ceil(size)` page estimate and `Roslynk:MaxResponseChars` note are gone, keeping omitted-result retries distinct from slot-body paging (Fixes #100)
+- Server instructions add a discovery-first workflow (names → relationships → member bodies) and a batching decision rule for `multi_query`; the roslynk skill mirrors both routing habits — measured ~16–24% fewer agent calls and 3.5× less tool output in A/B runs (Fixes #101)
+- Current tool guidance is published from C# method `[Description]` attributes; per-tool Markdown copies are removed, while the skill retains minimal routing guidance (Fixes #99, Fixes #100)
+- Shared workflows (scope, lifecycle, output, names, paging, freshness, editing, diagnostics and Razor) are returned in MCP server instructions from `McpServerRegistration.Configure`; the skill is reduced to routing guidance (Fixes #100)
+- The roslynk skill is reduced to routing guidance; the duplicated tool-reference file is removed (Fixes #99)
 - `multi_query` runs every operation, then delivers whole results smallest-first until the response budget is filled, naming the rest in a `retry=<index>:<size>` header (each size is that result's cost as a ratio of the budget, rounded up to 0.1); batch order no longer matters, slots are complete or absent, and nothing is ever cut mid-body (Fixes #96)
 - `multi_query` runs its operations in parallel and derives its operation limit from the framing itself (a batch whose retry line cannot fit is refused with `error=Invalid` before anything runs) instead of a fixed 25 (Fixes #96)
 - Oversized results from find_references, find_reads, find_writes, get_callers, get_callees, get_members, search_symbols, find_implementations, get_type_hierarchy, find_dead_code, find_dead_conditionals, get_diagnostics and get_symbol_body page by item with `startItem`/`maxSize` (`count=`/`truncated=Y`/`nextStartItem=`), and every page repeats its container lines so it reads standalone; a result that fits whole carries no paging headers (Fixes #96)

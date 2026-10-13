@@ -9,6 +9,7 @@ using Microsoft.CodeAnalysis.Rename;
 using Microsoft.CodeAnalysis.Text;
 using ModelContextProtocol.Server;
 using Morris.Roslynk.Infrastructure.CodeActions;
+using Morris.Roslynk.Infrastructure.Documentation;
 using Morris.Roslynk.Infrastructure.Lifecycle;
 using Morris.Roslynk.Infrastructure.Outlines;
 using Morris.Roslynk.Infrastructure.Razor;
@@ -40,6 +41,24 @@ public sealed class ExtractMethodTool
 		ApplyPipeline = applyPipeline ?? throw new ArgumentNullException(nameof(applyPipeline));
 	}
 
+	[Description("""
+		Extracts contiguous C# statements or one expression into a method/local function, replacing the
+		selection with a call. Roslyn data-flow determines parameters, ref/out, return value, static/async
+		and call-site code. Surrounding whitespace is ignored.
+
+		Additional headers: method (final name), symbolName (usable in name-based tools, e.g.
+		N.T.M(int).NewMethod(string) for a local function), kind (Method|LocalFunction), signature
+		(declaration header), call (statement containing the call).
+
+		Errors:
+		- NotSupported: extraction unavailable, behavior-change warnings, new compile errors (listed),
+		  or generated .g.cs targets (including Razor output).
+		- Conflict: methodName would bind a call to another member.
+		- NotFound: unloaded source file.
+		- Invalid: empty/out-of-range selection or invalid methodName.
+
+		Razor selections outside C# return NotSupported; inserting a method outside @code may be unmappable.
+		""")]
 	[McpServerTool(
 		Name = ExtractMethodName,
 		Title = "Extract a selection into a method",
@@ -47,40 +66,16 @@ public sealed class ExtractMethodTool
 		Idempotent = false,
 		Destructive = true,
 		OpenWorld = false)]
-	[Description(
-		$"""
-		Extracts a contiguous selection of C# statements or a single expression into a new method (or local
-		function) and replaces the selection with a call, using Roslyn's own Extract Method refactoring and
-		data-flow analysis to decide parameters, ref/out, return value, static/async modifiers and the call
-		site; the deterministic equivalent of picking 'Extract method' from get_code_actions. Surrounding
-		whitespace in the selection is ignored. Returns a text result, not JSON: 'applied', 'method' (the
-		final name), 'symbolName' (the extracted method's full name, e.g. 'N.T.M(int).NewMethod(string)' for a
-		local function, ready to pass to the name-based tools), 'kind' (Method or LocalFunction), 'signature' (the new declaration's header) and 'call'
-		(the statement now containing the call) headers, 'status', a blank line, then one solution-relative
-		changed-file path per line. {OutlineDescriptions.Project} {OutlineDescriptions.Freshness} Before
-		anything is written the result is checked: a selection Roslyn cannot extract, or whose extraction
-		Roslyn flags as possibly changing behavior, is error=NotSupported with the reason; an extraction that
-		would introduce compile errors is error=NotSupported listing them; a methodName that would bind a call
-		to a different member is error=Conflict; a file edited since the extraction was computed is
-		error=Stale. Nothing is written in any failure case. A documentPath that is not a solution-compiled
-		.cs, .razor or .cshtml document is error=NotFound; generated code (.g.cs, including Razor output) is
-		error=NotSupported. In a .razor/.cshtml file the selection must be inside C# (an @code block or
-		expression), otherwise error=NotSupported; the extraction is computed on the generated C# and mapped
-		back to the Razor source, and an edit that cannot be mapped (such as a method inserted outside the
-		@code block) is error=NotSupported, mismatched Razor text error=Conflict;
-		an out-of-range or empty selection, or an invalid methodName, is error=Invalid. Pass checkOnly to
-		preview the name, signature, call and changed files without writing.
-		""")]
 	public async Task<string> ExtractMethod(
-		[Description("Solution handle returned by open_solution.")] string solutionId,
-		[Description("Path of the .cs, .razor or .cshtml file; absolute, or relative to the solution folder.")] string documentPath,
-		[Description("1-based line where the selection starts.")] int startLine,
-		[Description("1-based column where the selection starts.")] int startColumn,
-		[Description("1-based line where the selection ends.")] int endLine,
-		[Description("1-based column just past the last selected character (exclusive).")] int endColumn,
-		[Description("Name for the extracted method. If omitted, Roslyn's own name (e.g. NewMethod, or one derived from the code) is kept.")] string? methodName = null,
-		[Description("If true, extracts into a local function inside the containing member instead of a new method.")] bool asLocalFunction = false,
-		[Description("If true, returns the preview and the files that would change without writing anything.")] bool checkOnly = false,
+		[Description(ParameterDescriptions.SolutionId)] string solutionId,
+		[Description(ParameterDescriptions.DocumentPath)] string documentPath,
+		[Description("Selection start line.")] int startLine,
+		[Description("Selection start column.")] int startColumn,
+		[Description("Selection end line.")] int endLine,
+		[Description("Selection end column.")] int endColumn,
+		[Description("Extracted method name; omit to keep Roslyn's chosen name.")] string? methodName = null,
+		[Description("Extract as a local function.")] bool asLocalFunction = false,
+		[Description("Preview code and changed paths without writing.")] bool checkOnly = false,
 		CancellationToken cancellationToken = default)
 	{
 		RoslynInstance instance = await InstanceRegistry.GetOrBeginAsync(solutionId);

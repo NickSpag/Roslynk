@@ -2,6 +2,7 @@ using System.ComponentModel;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.FindSymbols;
 using ModelContextProtocol.Server;
+using Morris.Roslynk.Infrastructure.Documentation;
 using Morris.Roslynk.Infrastructure.Lifecycle;
 using Morris.Roslynk.Infrastructure.Outlines;
 using Morris.Roslynk.Infrastructure.Projections;
@@ -30,6 +31,17 @@ public sealed class FindReferencesTool
 		Budget = responseBudget ?? ResponseBudget.Default;
 	}
 
+	[Description("""
+		SupportsPaging=Y
+
+		Finds semantic references, including partial classes/code-behind.
+		Body: project > folder > file > namespace > type > member. Shared declarations appear once;
+		type locations appear only when the declaration references the target; collapsed references
+		use pipe-delimited loc lists.
+
+		Combine with get_callers/get_callees/find_implementations/get_type_hierarchy via multi_query for
+		usage/impact analysis.
+		""")]
 	[McpServerTool(
 		Name = FindReferencesName,
 		Title = "Find references to a symbol",
@@ -37,34 +49,12 @@ public sealed class FindReferencesTool
 		Idempotent = true,
 		Destructive = false,
 		OpenWorld = false)]
-	[Description(
-		$"""
-		Finds all references to a symbol across the solution, resolved by fully-qualified name (e.g.
-		'Namespace.Type' or 'Namespace.Type.Member').
-		{OutlineDescriptions.CommonMethodInstructions}
-		The body groups every reference under file -> namespace -> type(s) -> member, so a shared declaration is printed once:
-		  resolvedSymbol=<name, parameter types included for a method or indexer>
-
-		  <project>
-		  \t<relative/forward-slash/folder>
-		  \t\t<file.cs|file.razor>
-		  \t\t\t<namespace, or "<global>">
-		  \t\t\t\t<typeKind>,<typeName>,<loc|loc|...>   (locations present only when the type declaration itself references the symbol)
-		  \t\t\t\t\t<memberKind>,<memberName>,<loc|loc|...>
-		where kind is one of {OutlineDescriptions.KindList}; {OutlineDescriptions.Loc}; {OutlineDescriptions.LocList}; {OutlineDescriptions.ListFieldQuoting}.
-		{OutlineDescriptions.Paging} {OutlineDescriptions.Project} {OutlineDescriptions.GeneratedLocations} {OutlineDescriptions.FilePathSplit} {OutlineDescriptions.ErrorBlock} It matches the compiler's
-		symbol, not text, so it skips comments, strings and unrelated same-named members, and still finds
-		usages in code-behind and partial classes.
-		{OutlineDescriptions.ProjectionCoverage}
-		Prefer this over text search for usages in *.cs, *.cshtml and *.razor; combine with
-		get_callers/find_implementations via multi_query for impact analysis.
-		""")]
 	public async Task<string> FindReferences(
-		[Description("Solution handle returned by open_solution.")] string solutionId,
-		[Description($"Fully-qualified name of the symbol, e.g. 'MyNamespace.MyType' or 'MyNamespace.MyType.MyMethod'. {OutlineDescriptions.SymbolNameGrammar}")] string symbolName,
-		[Description("Maximum reference locations to return. Omit for every reference (paging walks the result with startItem).")] int? maxResults = null,
-		[Description("1-based first item of the page; only pass it to continue from nextStartItem=. Default 1.")] int startItem = 1,
-		[Description("Page size in characters; an oversized result is returned as a page with count=/truncated=Y/nextStartItem=. Default: the response budget.")] int maxSize = 0,
+		[Description(ParameterDescriptions.SolutionId)] string solutionId,
+		[Description("Symbol name.")] string symbolName,
+		[Description("Reference-location cap.")] int? maxResults = null,
+		[Description(ParameterDescriptions.StartItem)] int startItem = 1,
+		[Description(ParameterDescriptions.MaxSize)] int maxSize = 0,
 		CancellationToken cancellationToken = default)
 	{
 		RoslynInstance instance = await InstanceRegistry.GetOrBeginAsync(solutionId);

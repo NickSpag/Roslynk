@@ -3,6 +3,7 @@ using System.Text;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.Text;
 using ModelContextProtocol.Server;
+using Morris.Roslynk.Infrastructure.Documentation;
 using Morris.Roslynk.Infrastructure.Lifecycle;
 using Morris.Roslynk.Infrastructure.Outlines;
 using Morris.Roslynk.Infrastructure.Patching;
@@ -24,6 +25,21 @@ public sealed class ApplyPatchTool
 		InstanceRegistry = instanceRegistry ?? throw new ArgumentNullException(nameof(instanceRegistry));
 	}
 
+	[Description("""
+		Applies content-anchored git unified diffs to existing text files. Targets: solution-compiled
+		.cs/.razor/.cshtml (model synchronized), plus other text files under the solution folder
+		(e.g. .csproj/.json/.md). Creation/deletion, binary files and paths outside that folder:
+		NotSupported; missing files: NotFound.
+
+		Header-only result: applied=<Y|N>. Hunk headers may omit line numbers (bare '@@'); each hunk
+		must match exactly once, so provide unique context. Unique-suffix paths also resolve.
+		Ambiguous paths return candidate=<path>; rejections list rejected=<path>.
+		Unmatched/ambiguous hunks: Conflict with file/reason; no file sections: Invalid.
+
+		baseVersions pairs patch paths with documentVersion: SHA-256 hex of loaded text encoded as
+		UTF-8 without BOM. No read tool reports this hash; supply only if you can compute it exactly.
+		Mismatches return Stale with stale=<path>.
+		""")]
 	[McpServerTool(
 		Name = ApplyPatchName,
 		Title = "Apply a patch",
@@ -31,29 +47,11 @@ public sealed class ApplyPatchTool
 		Idempotent = false,
 		Destructive = true,
 		OpenWorld = false)]
-	[Description(
-		$"""
-		Applies a git unified diff to text files, located by content (not line numbers) and written atomically.
-		Targets: solution-compiled .cs files and .razor/.cshtml documents (kept in sync with the in-memory model),
-		plus any other existing text file under the solution folder (e.g. .csproj, .json, .md), written to disk.
-		Returns a header-only text result, not JSON: 'applied=<Y|N>' (and 'status' only when not Ready)
-		on success (applied is N for a checkOnly preview). {OutlineDescriptions.Freshness} Prefer this over the host's raw file
-		edit for .cs so the in-memory model stays in sync. Hunk headers may omit line numbers (a bare '@@'); a
-		content-anchored hunk must match exactly one place, so include enough surrounding context that it is
-		unambiguous. Paths are relative to the solution folder; a path that is a unique suffix of a solution file
-		(e.g. relative to the repository root) also resolves. Edits existing files only: creation/deletion,
-		binary files and paths outside the solution folder are rejected as 'error=NotSupported'; a file that
-		does not exist is 'error=NotFound'; a path matching several distinct files is 'error=Ambiguous' with
-		'candidate=<solution-relative path>' lines. Rejections list 'rejected=<path>' lines. Pass baseVersions (the
-		documentVersion each file was read at) to be told if a file moved since (returned as 'error=Stale' with
-		'stale=<path>' lines); pass checkOnly to validate without writing. An unmatched or ambiguous hunk is
-		error=Conflict naming the file and reason; a patch with no file sections is error=Invalid.
-		""")]
 	public async Task<string> ApplyPatch(
-		[Description("Solution handle returned by open_solution.")] string solutionId,
-		[Description("A git unified diff (--- / +++ / @@ hunks) targeting one or more text files.")] string patch,
-		[Description("Optional: the documentVersion each touched file was based on, to detect external edits.")] IReadOnlyList<FileVersion>? baseVersions = null,
-		[Description("If true, returns the files that would change without writing anything.")] bool checkOnly = false,
+		[Description(ParameterDescriptions.SolutionId)] string solutionId,
+		[Description("Git unified diff (---/+++/@@).")] string patch,
+		[Description("Patch paths and expected documentVersion hashes.")] IReadOnlyList<FileVersion>? baseVersions = null,
+		[Description(ParameterDescriptions.CheckOnly)] bool checkOnly = false,
 		CancellationToken cancellationToken = default)
 	{
 		RoslynInstance instance = await InstanceRegistry.GetOrBeginAsync(solutionId);
