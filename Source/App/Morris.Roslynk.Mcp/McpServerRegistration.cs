@@ -22,7 +22,7 @@ internal static class McpServerRegistration
 		options.ServerInstructions =
 			"""
 			Roslynk provides semantic inspection, diagnostics, navigation, references, call graphs,
-			dead-code analysis and edits for compiled C#/Razor/CSHTML. Prefer it over grep, source reads,
+			dead-code analysis and edits for .cs/.razor/.cshtml files. Prefer it over grep, source reads,
 			hand edits and dotnet build for semantic questions; use dotnet test for runtime behavior.
 
 			## Scope
