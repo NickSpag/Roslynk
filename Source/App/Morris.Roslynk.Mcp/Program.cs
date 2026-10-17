@@ -12,7 +12,15 @@ if (args is ["stdio", ..])
 	return;
 }
 
-WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
+// Root content at the install directory, not the working directory. The host watches its content root
+// recursively for appsettings changes, so a daemon started from a home directory would put an inotify
+// watch on every directory under it and exhaust the user's watch limit on Linux, leaving the solution
+// file watchers with none. DaemonLauncher already starts the daemon here; a manual `roslynk` may not.
+WebApplicationBuilder builder = WebApplication.CreateBuilder(new WebApplicationOptions
+{
+	Args = args,
+	ContentRootPath = AppContext.BaseDirectory,
+});
 
 // Safe on every OS: AddWindowsService only takes effect when the process is launched by the
 // Windows Service Control Manager; otherwise it registers nothing.
