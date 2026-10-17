@@ -11,5 +11,5 @@ Body: project > folder > file > namespace; leaves: <typeKind>,<typeName>,<loc>.
 
 - solutionId: Solution handle.
 - symbolName: Interface/abstract symbol name.
-- startItem: First item (1-based).
-- maxSize: Page character limit.
+- startItem: First item (1-based). (default: 1)
+- maxSize: Page character limit. (default: 0)

@@ -14,5 +14,5 @@ Razor offers compiler fixes/refactorings; positions outside C# return NotSupport
 - documentPath: Source file path.
 - line: Position line.
 - column: Position column.
-- endLine: Selection end line.
-- endColumn: Selection end column.
+- endLine: Selection end line. (default: null)
+- endColumn: Selection end column. (default: null)

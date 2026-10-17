@@ -15,5 +15,5 @@ Body: project > folder > file > namespace > containing type; leaves name callers
 
 - solutionId: Solution handle.
 - methodName: Method name.
-- startItem: First item (1-based).
-- maxSize: Page character limit.
+- startItem: First item (1-based). (default: 1)
+- maxSize: Page character limit. (default: 0)

@@ -23,4 +23,4 @@ Only slot-body nextStartItem drives paging; retry means an omitted result, not a
 
 - solutionId: Solution handle.
 - operations: Read-only tools and arguments, in request order.
-- expectSnapshot: Previous snapshot id; mismatch returns Stale before execution.
+- expectSnapshot: Previous snapshot id; mismatch returns Stale before execution. (default: null)

@@ -10,4 +10,4 @@ Other states omit messages. Up to 20 per solution, then loadDiagnosticsTruncated
 
 ## Parameters
 
-- allLoadDiagnostics: Include all load diagnostics.
+- allLoadDiagnostics: Include all load diagnostics. (default: false)

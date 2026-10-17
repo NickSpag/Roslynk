@@ -19,8 +19,8 @@ Omit maxResults for a complete scan.
 ## Parameters
 
 - solutionId: Solution handle.
-- scope: Name prefix, e.g. MyApp.Services; omit for the whole solution.
-- includePublic: Include unreferenced public/protected members (the API surface).
-- maxResults: Scan cap; omit for a complete scan.
-- startItem: First item (1-based).
-- maxSize: Page character limit.
+- scope: Name prefix, e.g. MyApp.Services; omit for the whole solution. (default: null)
+- includePublic: Include unreferenced public/protected members (the API surface). (default: false)
+- maxResults: Scan cap; omit for a complete scan. (default: null)
+- startItem: First item (1-based). (default: 1)
+- maxSize: Page character limit. (default: 0)

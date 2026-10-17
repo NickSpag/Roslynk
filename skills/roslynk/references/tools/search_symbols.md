@@ -12,6 +12,6 @@ type locations appear only when the type itself matches.
 
 - solutionId: Solution handle.
 - query: Case-insensitive name substring.
-- maxResults: Result cap.
-- startItem: First item (1-based).
-- maxSize: Page character limit.
+- maxResults: Result cap. (default: null)
+- startItem: First item (1-based). (default: 1)
+- maxSize: Page character limit. (default: 0)

@@ -26,6 +26,6 @@ Razor selections outside C# return NotSupported; inserting a method outside @cod
 - startColumn: Selection start column.
 - endLine: Selection end line.
 - endColumn: Selection end column.
-- methodName: Extracted method name; omit to keep Roslyn's chosen name.
-- asLocalFunction: Extract as a local function.
-- checkOnly: Preview code and changed paths without writing.
+- methodName: Extracted method name; omit to keep Roslyn's chosen name. (default: null)
+- asLocalFunction: Extract as a local function. (default: false)
+- checkOnly: Preview code and changed paths without writing. (default: false)

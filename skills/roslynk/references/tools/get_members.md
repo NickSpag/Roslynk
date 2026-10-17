@@ -14,12 +14,12 @@ Includes all accessibilities. Filter with nameFilter/include*; use get_symbol_bo
 
 - solutionId: Solution handle.
 - typeName: Type name.
-- includeInherited: Include inherited members.
-- nameFilter: Case-insensitive name filter: trailing '*' means prefix; otherwise substring. Null matches all.
-- includeMethods: Include methods.
-- includeFields: Include fields.
-- includeProperties: Include properties.
-- includeEvents: Include events.
-- includeNestedTypes: Include nested types.
-- startItem: First item (1-based).
-- maxSize: Page character limit.
+- includeInherited: Include inherited members. (default: false)
+- nameFilter: Case-insensitive name filter: trailing '*' means prefix; otherwise substring. Null matches all. (default: null)
+- includeMethods: Include methods. (default: true)
+- includeFields: Include fields. (default: true)
+- includeProperties: Include properties. (default: true)
+- includeEvents: Include events. (default: true)
+- includeNestedTypes: Include nested types. (default: true)
+- startItem: First item (1-based). (default: 1)
+- maxSize: Page character limit. (default: 0)

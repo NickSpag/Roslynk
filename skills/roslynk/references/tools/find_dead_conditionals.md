@@ -14,5 +14,5 @@ Use find_dead_code for unreferenced symbols.
 ## Parameters
 
 - solutionId: Solution handle.
-- startItem: First item (1-based).
-- maxSize: Page character limit.
+- startItem: First item (1-based). (default: 1)
+- maxSize: Page character limit. (default: 0)

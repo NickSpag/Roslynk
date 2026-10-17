@@ -18,4 +18,4 @@ Intervening edits to other files are preserved.
 - solutionId: Solution handle.
 - symbolName: Symbol name.
 - newName: New C# identifier.
-- checkOnly: Preview only.
+- checkOnly: Preview only. (default: false)

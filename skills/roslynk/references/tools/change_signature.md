@@ -18,5 +18,5 @@ Additional headers: resolvedMethod (pre-edit overload with parameter types), upd
 - parameterType: New parameter type.
 - parameterName: New parameter's C# identifier.
 - defaultValue: Required default expression, e.g. default, null, 0.
-- callSiteArgument: Named argument expression for all call sites; omit to use the default.
-- checkOnly: Preview only.
+- callSiteArgument: Named argument expression for all call sites; omit to use the default. (default: null)
+- checkOnly: Preview only. (default: false)

@@ -13,4 +13,4 @@ Additional header: action.
 
 - solutionId: Solution handle.
 - actionId: actionId from get_code_actions.
-- checkOnly: Preview only.
+- checkOnly: Preview only. (default: false)

@@ -26,4 +26,4 @@ Errors:
 - methodId: Declaring method/local function/constructor/indexer name.
 - parameterName: Current parameter name.
 - newName: New C# identifier.
-- checkOnly: Preview only.
+- checkOnly: Preview only. (default: false)

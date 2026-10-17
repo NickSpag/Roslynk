@@ -22,6 +22,6 @@ methods include their 'this' parameter.
 
 - solutionId: Solution handle.
 - memberName: Member name.
-- excludeExternal: Exclude metadata callees (BCL/NuGet).
-- startItem: First item (1-based).
-- maxSize: Page character limit.
+- excludeExternal: Exclude metadata callees (BCL/NuGet). (default: false)
+- startItem: First item (1-based). (default: 1)
+- maxSize: Page character limit. (default: 0)

@@ -10,6 +10,6 @@ Body follows find_references with one location per leaf.
 
 - solutionId: Solution handle.
 - symbolName: OutlineDescriptions.AccessSymbolName
-- maxResults: Location cap.
-- startItem: First item (1-based).
-- maxSize: Page character limit.
+- maxResults: Location cap. (default: null)
+- startItem: First item (1-based). (default: 1)
+- maxSize: Page character limit. (default: 0)

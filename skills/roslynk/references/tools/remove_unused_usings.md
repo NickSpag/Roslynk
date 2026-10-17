@@ -9,5 +9,5 @@ NotFound: unloaded source file.
 ## Parameters
 
 - solutionId: Solution handle.
-- documentPath: Source file to clean; omit for the whole solution.
-- checkOnly: Preview only.
+- documentPath: Source file to clean; omit for the whole solution. (default: null)
+- checkOnly: Preview only. (default: false)

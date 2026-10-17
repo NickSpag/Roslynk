@@ -19,4 +19,4 @@ Additional header: action.
 - diagnosticId: Diagnostic id, e.g. CS0219/IDE0005.
 - line: Diagnostic line from get_diagnostics.
 - column: Diagnostic column from get_diagnostics.
-- checkOnly: Preview only.
+- checkOnly: Preview only. (default: false)

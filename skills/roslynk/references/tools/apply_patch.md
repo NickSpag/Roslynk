@@ -19,5 +19,5 @@ Mismatches return Stale with stale=<path>.
 
 - solutionId: Solution handle.
 - patch: Git unified diff (---/+++/@@).
-- baseVersions: Patch paths and expected documentVersion hashes.
-- checkOnly: Preview only.
+- baseVersions: Patch paths and expected documentVersion hashes. (default: null)
+- checkOnly: Preview only. (default: false)

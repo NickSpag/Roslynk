@@ -15,6 +15,6 @@ usage/impact analysis.
 
 - solutionId: Solution handle.
 - symbolName: Symbol name.
-- maxResults: Reference-location cap.
-- startItem: First item (1-based).
-- maxSize: Page character limit.
+- maxResults: Reference-location cap. (default: null)
+- startItem: First item (1-based). (default: 1)
+- maxSize: Page character limit. (default: 0)

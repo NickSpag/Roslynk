@@ -21,7 +21,7 @@ Oversized parts omit text with omitted=Y, truncated=Y, omittedParts=<k>; fetch w
 
 - solutionId: Solution handle.
 - symbolName: Symbol name.
-- includeLeadingTrivia: Include leading comments, XML docs and directives.
-- startItem: First returned-text line (1-based).
-- maxSize: Page character limit.
-- part: Declaration part (1-based); 0 returns all, omitting oversized parts.
+- includeLeadingTrivia: Include leading comments, XML docs and directives. (default: false)
+- startItem: First returned-text line (1-based). (default: 1)
+- maxSize: Page character limit. (default: 0)
+- part: Declaration part (1-based); 0 returns all, omitting oversized parts. (default: 0)
