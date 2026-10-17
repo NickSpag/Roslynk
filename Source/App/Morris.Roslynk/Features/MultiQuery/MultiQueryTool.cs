@@ -1,4 +1,3 @@
-using System.ComponentModel;
 using System.Globalization;
 using System.Text;
 using System.Text.Json;
@@ -36,36 +35,16 @@ public sealed class MultiQueryTool
 		Budget = responseBudget ?? ResponseBudget.Default;
 	}
 
-	[Description("""
-		Runs independent read-only operations against one snapshot, returning results in request order.
-		Operations cannot reference each other's output. Batch only queries needed for the question.
-
-		operations.tool uses the schema enum; arguments use that tool's single-call names/defaults.
-		Unknown/misspelled arguments are rejected.
-
-		All operations run. budget=<n> is the per-operation allowance; whole results are selected
-		smallest-first until the response budget fills. Slots are complete or absent. Missing results
-		report retry=<index>:<size> in request order; size is result cost/budget, rounded up to 0.1.
-		- size >= 1.0: resend alone.
-		- Sizes totaling <= 1.0: fit one continuation batch.
-		- Sizes below 0.1: about ten per continuation batch is safe.
-
-		Resend retry operations with original arguments from your request copy; frames contain only
-		index/tool. Pass snapshot=<id> as expectSnapshot; changed generations return Stale with both ids:
-		rerun the whole batch. Ratios are snapshot-specific; reruns remeasure/reselect.
-		Only slot-body nextStartItem drives paging; retry means an omitted result, not a page.
-		""")]
 	[McpServerTool(
 		Name = MultiQueryName,
-		Title = "Run several read-only queries in one call",
 		ReadOnly = true,
 		Idempotent = true,
 		Destructive = false,
 		OpenWorld = false)]
 		public async Task<string> MultiQuery(
-			[Description("Solution handle.")] string solutionId,
-			[Description("Read-only tools and arguments, in request order.")] IReadOnlyList<MultiQueryOperation> operations,
-			[Description("Previous snapshot id; mismatch returns Stale before execution.")] string? expectSnapshot = null)
+			string solutionId,
+			IReadOnlyList<MultiQueryOperation> operations,
+			string? expectSnapshot = null)
 	{
 		// Structural validation first: an uninterpretable batch cannot produce slots. (An op naming a tool
 		// outside the enum never reaches here - the SDK's binding layer refuses it and RoslynkTool renders

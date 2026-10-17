@@ -1,4 +1,3 @@
-using System.ComponentModel;
 using Microsoft.CodeAnalysis;
 using ModelContextProtocol.Server;
 using Morris.Roslynk.Infrastructure.CodeActions;
@@ -28,26 +27,16 @@ public sealed class ApplyCodeActionTool
 		ApplyPipeline = applyPipeline ?? throw new ArgumentNullException(nameof(applyPipeline));
 	}
 
-	[Description("""
-		Applies actionId from get_code_actions, re-resolving at its original position; retains no action state.
-
-		Errors: Conflict if the action no longer resolves (rerun get_code_actions); Invalid for a
-		malformed actionId. Adding usings/members to Razor-generated
-		scaffolding may be unmappable.
-
-		Additional header: action.
-		""")]
 	[McpServerTool(
 		Name = ApplyCodeActionName,
-		Title = "Apply a code action",
 		ReadOnly = false,
 		Idempotent = false,
 		Destructive = true,
 		OpenWorld = false)]
 	public async Task<string> ApplyCodeAction(
-		[Description(ParameterDescriptions.SolutionId)] string solutionId,
-		[Description("actionId from get_code_actions.")] string actionId,
-		[Description(ParameterDescriptions.CheckOnly)] bool checkOnly = false,
+		string solutionId,
+		string actionId,
+		bool checkOnly = false,
 		CancellationToken cancellationToken = default)
 	{
 		RoslynInstance instance = await InstanceRegistry.GetOrBeginAsync(solutionId);

@@ -1,5 +1,4 @@
 using System.Collections.Immutable;
-using System.ComponentModel;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
@@ -36,39 +35,18 @@ public sealed class RenameParameterTool
 		ApplyPipeline = applyPipeline ?? throw new ArgumentNullException(nameof(applyPipeline));
 	}
 
-	[Description("""
-		Renames one method/local function/constructor/indexer overload's parameter, updating declaration,
-		body uses, named call arguments and <paramref> docs. Strings/comments/unrelated text are unchanged.
-
-		Cascades through overrides, interfaces/implementations and partial-method parts when a source
-		parameter at the same position has the old name. Other names, metadata and generated-only
-		related declarations remain unchanged, listed in unchangedRelated.
-
-		Additional headers: resolvedMethod (pre-rename member), parameter (old name), renamedMembers
-		(declaration count including target), unchangedRelated (semicolon-separated; omitted if empty).
-
-		Errors:
-		- Invalid: invalid identifier or newName=parameterName.
-		- Ambiguous methodId: overload candidates; no match gives fuzzy suggestions.
-		- NotFound: absent parameterName; lists parameters.
-		- Conflict: newName clashes with a parameter, local, local function, lambda/query variable or
-		  type parameter in a renamed declaration.
-		- NotSupported: unsupported target kind, positional record parameter, metadata-only or
-		  generated-only target (names generator).
-		""")]
 	[McpServerTool(
 		Name = RenameParameterName,
-		Title = "Rename a method parameter",
 		ReadOnly = false,
 		Idempotent = false,
 		Destructive = true,
 		OpenWorld = false)]
 	public async Task<string> RenameParameter(
-		[Description(ParameterDescriptions.SolutionId)] string solutionId,
-		[Description("Declaring method/local function/constructor/indexer name.")] string methodId,
-		[Description("Current parameter name.")] string parameterName,
-		[Description("New C# identifier.")] string newName,
-		[Description(ParameterDescriptions.CheckOnly)] bool checkOnly = false,
+		string solutionId,
+		string methodId,
+		string parameterName,
+		string newName,
+		bool checkOnly = false,
 		CancellationToken cancellationToken = default)
 	{
 		RoslynInstance instance = await InstanceRegistry.GetOrBeginAsync(solutionId);

@@ -1,4 +1,3 @@
-using System.ComponentModel;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.FindSymbols;
 using ModelContextProtocol.Server;
@@ -28,27 +27,18 @@ public sealed class SearchSymbolsTool
 		Budget = responseBudget ?? ResponseBudget.Default;
 	}
 
-	[Description("""
-		SupportsPaging=Y
-
-		Searches source symbol names, including generated declarations
-		and local functions nested under their declaring member/outer local functions.
-		Body: project > folder > file > namespace > type > member. Members nest under parent types;
-		type locations appear only when the type itself matches.
-		""")]
 	[McpServerTool(
 		Name = SearchSymbolsName,
-		Title = "Search symbols by name",
 		ReadOnly = true,
 		Idempotent = true,
 		Destructive = false,
 		OpenWorld = false)]
 	public async Task<string> SearchSymbols(
-		[Description(ParameterDescriptions.SolutionId)] string solutionId,
-		[Description("Case-insensitive name substring.")] string query,
-		[Description("Result cap.")] int? maxResults = null,
-		[Description(ParameterDescriptions.StartItem)] int startItem = 1,
-		[Description(ParameterDescriptions.MaxSize)] int maxSize = 0)
+		string solutionId,
+		string query,
+		int? maxResults = null,
+		int startItem = 1,
+		int maxSize = 0)
 	{
 		RoslynInstance instance = await InstanceRegistry.GetOrBeginAsync(solutionId);
 		SolutionModel model = await instance.ReadModelAsync();

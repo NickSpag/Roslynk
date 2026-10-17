@@ -1,4 +1,3 @@
-using System.ComponentModel;
 using Microsoft.CodeAnalysis;
 using ModelContextProtocol.Server;
 using Morris.Roslynk.Infrastructure.Documentation;
@@ -32,35 +31,24 @@ public sealed class GetMembersTool
 		Budget = responseBudget ?? ResponseBudget.Default;
 	}
 
-	[Description("""
-		SupportsPaging=Y
-
-		Lists methods/properties/fields/events/nested types grouped by declaring file ('<metadata>' for
-		referenced assemblies). Leaves: <memberKind>,<name>,<loc>, plus pipe-delimited parameter types
-		for methods with parameters. Metadata loc is empty. Local functions nest under their member
-		in declaration order, one level per nesting.
-
-		Includes all accessibilities. Filter with nameFilter/include*; use get_symbol_body for bodies.
-		""")]
 	[McpServerTool(
 		Name = GetMembersName,
-		Title = "Get a type's members",
 		ReadOnly = true,
 		Idempotent = true,
 		Destructive = false,
 		OpenWorld = false)]
 	public async Task<string> GetMembers(
-		[Description(ParameterDescriptions.SolutionId)] string solutionId,
-		[Description("Type name.")] string typeName,
-		[Description("Include inherited members.")] bool includeInherited = false,
-		[Description("Case-insensitive name filter: trailing '*' means prefix; otherwise substring. Null matches all.")] string? nameFilter = null,
-		[Description("Include methods.")] bool includeMethods = true,
-		[Description("Include fields.")] bool includeFields = true,
-		[Description("Include properties.")] bool includeProperties = true,
-		[Description("Include events.")] bool includeEvents = true,
-		[Description("Include nested types.")] bool includeNestedTypes = true,
-		[Description(ParameterDescriptions.StartItem)] int startItem = 1,
-		[Description(ParameterDescriptions.MaxSize)] int maxSize = 0)
+		string solutionId,
+		string typeName,
+		bool includeInherited = false,
+		string? nameFilter = null,
+		bool includeMethods = true,
+		bool includeFields = true,
+		bool includeProperties = true,
+		bool includeEvents = true,
+		bool includeNestedTypes = true,
+		int startItem = 1,
+		int maxSize = 0)
 	{
 		RoslynInstance instance = await InstanceRegistry.GetOrBeginAsync(solutionId);
 		SolutionModel model = await instance.ReadModelAsync();

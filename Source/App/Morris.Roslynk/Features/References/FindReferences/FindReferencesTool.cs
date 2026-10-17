@@ -1,4 +1,3 @@
-using System.ComponentModel;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.FindSymbols;
 using ModelContextProtocol.Server;
@@ -31,30 +30,18 @@ public sealed class FindReferencesTool
 		Budget = responseBudget ?? ResponseBudget.Default;
 	}
 
-	[Description("""
-		SupportsPaging=Y
-
-		Finds semantic references, including partial classes/code-behind.
-		Body: project > folder > file > namespace > type > member. Shared declarations appear once;
-		type locations appear only when the declaration references the target; collapsed references
-		use pipe-delimited loc lists.
-
-		Combine with get_callers/get_callees/find_implementations/get_type_hierarchy via multi_query for
-		usage/impact analysis.
-		""")]
 	[McpServerTool(
 		Name = FindReferencesName,
-		Title = "Find references to a symbol",
 		ReadOnly = true,
 		Idempotent = true,
 		Destructive = false,
 		OpenWorld = false)]
 	public async Task<string> FindReferences(
-		[Description(ParameterDescriptions.SolutionId)] string solutionId,
-		[Description("Symbol name.")] string symbolName,
-		[Description("Reference-location cap.")] int? maxResults = null,
-		[Description(ParameterDescriptions.StartItem)] int startItem = 1,
-		[Description(ParameterDescriptions.MaxSize)] int maxSize = 0,
+		string solutionId,
+		string symbolName,
+		int? maxResults = null,
+		int startItem = 1,
+		int maxSize = 0,
 		CancellationToken cancellationToken = default)
 	{
 		RoslynInstance instance = await InstanceRegistry.GetOrBeginAsync(solutionId);

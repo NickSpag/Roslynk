@@ -1,4 +1,3 @@
-using System.ComponentModel;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.FindSymbols;
 using ModelContextProtocol.Server;
@@ -29,25 +28,17 @@ public sealed class GetTypeHierarchyTool
 		Budget = responseBudget ?? ResponseBudget.Default;
 	}
 
-	[Description("""
-		SupportsPaging=Y
-
-		Returns base types (including metadata), implemented interfaces and known derived types.
-		Header: resolvedType. Body sections: base, interfaces, derived (empty sections omitted).
-		Entries: <typeKind>,<fully-qualified name>; typeKind=class|struct|interface|enum|delegate.
-		""")]
 	[McpServerTool(
 		Name = GetTypeHierarchyName,
-		Title = "Get a type's hierarchy",
 		ReadOnly = true,
 		Idempotent = true,
 		Destructive = false,
 		OpenWorld = false)]
 	public async Task<string> GetTypeHierarchy(
-		[Description(ParameterDescriptions.SolutionId)] string solutionId,
-		[Description("Type name.")] string typeName,
-		[Description(ParameterDescriptions.StartItem)] int startItem = 1,
-		[Description(ParameterDescriptions.MaxSize)] int maxSize = 0)
+		string solutionId,
+		string typeName,
+		int startItem = 1,
+		int maxSize = 0)
 	{
 		RoslynInstance instance = await InstanceRegistry.GetOrBeginAsync(solutionId);
 		SolutionModel model = await instance.ReadModelAsync();

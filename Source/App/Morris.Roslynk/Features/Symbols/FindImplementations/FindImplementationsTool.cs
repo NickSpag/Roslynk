@@ -1,4 +1,3 @@
-using System.ComponentModel;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.FindSymbols;
 using ModelContextProtocol.Server;
@@ -30,25 +29,17 @@ public sealed class FindImplementationsTool
 		Budget = responseBudget ?? ResponseBudget.Default;
 	}
 
-	[Description("""
-		SupportsPaging=Y
-
-		Finds implementations/overrides of interfaces, interface members or abstract members.
-		Returns resolvedSymbol (including method/indexer parameter types).
-		Body: project > folder > file > namespace; leaves: <typeKind>,<typeName>,<loc>.
-		""")]
 	[McpServerTool(
 		Name = FindImplementationsName,
-		Title = "Find implementations",
 		ReadOnly = true,
 		Idempotent = true,
 		Destructive = false,
 		OpenWorld = false)]
 	public async Task<string> FindImplementations(
-		[Description(ParameterDescriptions.SolutionId)] string solutionId,
-		[Description("Interface/abstract symbol name.")] string symbolName,
-		[Description(ParameterDescriptions.StartItem)] int startItem = 1,
-		[Description(ParameterDescriptions.MaxSize)] int maxSize = 0)
+		string solutionId,
+		string symbolName,
+		int startItem = 1,
+		int maxSize = 0)
 	{
 		RoslynInstance instance = await InstanceRegistry.GetOrBeginAsync(solutionId);
 		SolutionModel model = await instance.ReadModelAsync();

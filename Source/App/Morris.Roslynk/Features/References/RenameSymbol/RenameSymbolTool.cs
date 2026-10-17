@@ -1,4 +1,3 @@
-using System.ComponentModel;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using ModelContextProtocol.Server;
@@ -33,31 +32,17 @@ public sealed class RenameSymbolTool
 		ApplyPipeline = applyPipeline ?? throw new ArgumentNullException(nameof(applyPipeline));
 	}
 
-	[Description("""
-		Renames a symbol and references across partial classes, code-behind and loaded frameworks under
-		shared conditional coverage. Strings/comments are unchanged. Razor supports @code, markup
-		expressions and component attributes.
-
-		Generated-only targets return NotSupported naming the generator; edit its input/generator.
-		Partial members/types with handwritten declarations are renamable; generators follow their names.
-
-		Additional header: resolvedSymbol (pre-rename name).
-		Errors: Invalid for invalid identifiers; Ambiguous with match candidates or fuzzy suggestions
-		when no match; Stale naming the target changed on disk/in the model since computation.
-		Intervening edits to other files are preserved.
-		""")]
 	[McpServerTool(
 		Name = RenameSymbolName,
-		Title = "Rename a symbol",
 		ReadOnly = false,
 		Idempotent = false,
 		Destructive = true,
 		OpenWorld = false)]
 	public async Task<string> RenameSymbol(
-		[Description(ParameterDescriptions.SolutionId)] string solutionId,
-		[Description("Symbol name.")] string symbolName,
-		[Description("New C# identifier.")] string newName,
-		[Description(ParameterDescriptions.CheckOnly)] bool checkOnly = false,
+		string solutionId,
+		string symbolName,
+		string newName,
+		bool checkOnly = false,
 		CancellationToken cancellationToken = default)
 	{
 		RoslynInstance instance = await InstanceRegistry.GetOrBeginAsync(solutionId);

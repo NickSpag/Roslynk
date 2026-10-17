@@ -1,4 +1,3 @@
-using System.ComponentModel;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
@@ -33,29 +32,17 @@ public sealed class GetCallersTool
 		Budget = responseBudget ?? ResponseBudget.Default;
 	}
 
-	[Description("""
-		SupportsPaging=Y
-
-		Finds callers, including implicit calls: foreach/await enumeration and awaiter members
-		(GetEnumerator/MoveNext/Current/Dispose, GetAwaiter/IsCompleted/GetResult, async equivalents),
-		using/await using Dispose/DisposeAsync, deconstruction/positional patterns, collection Add,
-		operators/conversions (+=/++/implicit/conditional true/false), query methods, interpolated-string
-		handlers, implicit base(), and Length/Count for ^/.. . See get_callees for its narrower coverage.
-
-		Body: project > folder > file > namespace > containing type; leaves name callers and declaration locations.
-		""")]
 	[McpServerTool(
 		Name = GetCallersName,
-		Title = "Get callers of a method",
 		ReadOnly = true,
 		Idempotent = true,
 		Destructive = false,
 		OpenWorld = false)]
 	public async Task<string> GetCallers(
-		[Description(ParameterDescriptions.SolutionId)] string solutionId,
-		[Description("Method name.")] string methodName,
-		[Description(ParameterDescriptions.StartItem)] int startItem = 1,
-		[Description(ParameterDescriptions.MaxSize)] int maxSize = 0)
+		string solutionId,
+		string methodName,
+		int startItem = 1,
+		int maxSize = 0)
 	{
 		RoslynInstance instance = await InstanceRegistry.GetOrBeginAsync(solutionId);
 		SolutionModel model = await instance.ReadModelAsync();

@@ -1,4 +1,3 @@
-using System.ComponentModel;
 using Microsoft.CodeAnalysis;
 using ModelContextProtocol.Server;
 using Morris.Roslynk.Infrastructure.CodeActions;
@@ -30,42 +29,26 @@ public sealed class GetDiagnosticsTool
 		Budget = responseBudget ?? ResponseBudget.Default;
 	}
 
-	[Description("""
-		SupportsPaging=Y
-
-		Returns compiler/analyzer diagnostics.
-
-		errors/warnings/infos/hidden count all content-filtered severities regardless of include flags.
-		The body lists flagged severities; summaryOnly summarizes all if none are flagged, otherwise
-		only flagged ones. Details: project > folder > file > severity; leaves: <id>,<line:col>,<message>.
-		Summary: <id>,<count>,<project>,<path>,<line:col>,<message> per id, ordered by count descending then id.
-
-		projectName/filePath/ids filter after compilation, reusing cached results; active filters echo
-		filter=<parameter>:<value>. Empty filtered results do not prove the solution clean.
-		Unknown project/file returns NotFound with candidates. Known matches without diagnostics return zeros.
-		Private fixer-trigger IDs are omitted; fix the public rule instead (e.g. IDE0005).
-		""")]
 	[McpServerTool(
 		Name = GetDiagnosticsName,
-		Title = "Get compiler diagnostics",
 		ReadOnly = true,
 		Idempotent = true,
 		Destructive = false,
 		OpenWorld = false)]
 	public async Task<string> GetDiagnostics(
-		[Description(ParameterDescriptions.SolutionId)] string solutionId,
-		[Description("List errors.")] bool includeErrors = false,
-		[Description("List warnings.")] bool includeWarnings = false,
-		[Description("List info diagnostics.")] bool includeInfo = false,
-		[Description("List hidden diagnostics.")] bool includeHidden = false,
-		[Description("Run analyzers; false is faster, compiler-only.")] bool includeAnalyzers = true,
-		[Description("Project filter: outline name with optional extension, case-insensitive; all loaded target frameworks.")] string? projectName = null,
-		[Description("File filter (case-insensitive), including diagnostics mapped to Razor source.")] string? filePath = null,
-		[Description("Diagnostic ids (case-insensitive), e.g. [\"CS0246\"]; null/empty matches all.")] string[]? ids = null,
-		[Description("Body-entry cap (ids with summaryOnly). Capped bodies report count=<listed>, truncated=Y.")] int? maxResults = null,
-		[Description("Summarize by diagnostic id.")] bool summaryOnly = false,
-		[Description(ParameterDescriptions.StartItem)] int startItem = 1,
-		[Description(ParameterDescriptions.MaxSize)] int maxSize = 0)
+		string solutionId,
+		bool includeErrors = false,
+		bool includeWarnings = false,
+		bool includeInfo = false,
+		bool includeHidden = false,
+		bool includeAnalyzers = true,
+		string? projectName = null,
+		string? filePath = null,
+		string[]? ids = null,
+		int? maxResults = null,
+		bool summaryOnly = false,
+		int startItem = 1,
+		int maxSize = 0)
 	{
 		RoslynInstance instance = await InstanceRegistry.GetOrBeginAsync(solutionId);
 		SolutionModel model = await instance.ReadModelAsync();

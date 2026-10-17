@@ -1,4 +1,3 @@
-using System.ComponentModel;
 using ModelContextProtocol.Server;
 using Morris.Roslynk.Infrastructure.Lifecycle;
 using Morris.Roslynk.Infrastructure.Outlines;
@@ -23,23 +22,14 @@ public sealed class GetSolutionStatusTool
 		InstanceRegistry = instanceRegistry ?? throw new ArgumentNullException(nameof(instanceRegistry));
 	}
 
-	[Description("""
-		Lists loaded solutions: <solutionId>,<status>,<loaded>/<total>.
-		loaded tracks Building progress; total='?' until known after initial loading.
-
-		Ready solutions add indented loadDiagnostic=<message> for analyzer/generator load failures,
-		project evaluation failures or missing SDKs, which may explain compiler errors.
-		Other states omit messages. Up to 20 per solution, then loadDiagnosticsTruncated=<n>.
-		""")]
 	[McpServerTool(
 		Name = GetSolutionStatusName,
-		Title = "Get loaded-solution status",
 		ReadOnly = true,
 		Idempotent = true,
 		Destructive = false,
 		OpenWorld = false)]
 	public string GetSolutionStatus(
-		[Description("Include all load diagnostics.")] bool allLoadDiagnostics = false)
+		bool allLoadDiagnostics = false)
 	{
 		List<RoslynInstance> instances = InstanceRegistry.LoadedInstances().ToList();
 		int? messageLimit = allLoadDiagnostics ? null : MaxLoadDiagnostics;

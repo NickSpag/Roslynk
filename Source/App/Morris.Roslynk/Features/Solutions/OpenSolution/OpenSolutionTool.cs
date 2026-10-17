@@ -1,4 +1,3 @@
-using System.ComponentModel;
 using Microsoft.CodeAnalysis;
 using ModelContextProtocol.Server;
 using Morris.Roslynk.Infrastructure.Lifecycle;
@@ -20,20 +19,14 @@ public sealed class OpenSolutionTool
 		InstanceRegistry = instanceRegistry ?? throw new ArgumentNullException(nameof(instanceRegistry));
 	}
 
-	[Description("""
-		Opens a .sln/.slnx asynchronously; repeated opens reuse the instance.
-		Headers: solutionId, status, projects, loadDiagnostics. Body: <projectPath>,<documentCount> per project.
-		While loading: status=Building, empty body. Missing solution: NotFound; failed load: Faulted.
-		""")]
 	[McpServerTool(
 		Name = OpenSolutionName,
-		Title = "Open a C# solution",
 		ReadOnly = true,
 		Idempotent = true,
 		Destructive = false,
 		OpenWorld = false)]
 	public string OpenSolution(
-		[Description("Absolute path to the .sln or .slnx file to open.")] string solutionPath)
+		string solutionPath)
 	{
 		string fullPath = Path.GetFullPath(solutionPath);
 		if (!File.Exists(fullPath))

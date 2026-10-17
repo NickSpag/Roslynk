@@ -1,4 +1,3 @@
-using System.ComponentModel;
 using Microsoft.CodeAnalysis;
 using ModelContextProtocol.Server;
 using Morris.Roslynk.Infrastructure.Documentation;
@@ -28,23 +27,17 @@ public sealed class FindDefinitionTool
 		ProjectionService = projectionService ?? throw new ArgumentNullException(nameof(projectionService));
 	}
 
-	[Description("""
-		Resolves the symbol at a source position. Returns fullName (including method/indexer parameter
-		types) and kind; source symbols add project, path and loc, metadata symbols add assembly.
-		No binding in any projection returns NotFound.
-		""")]
 	[McpServerTool(
 		Name = FindDefinitionName,
-		Title = "Find a symbol's definition",
 		ReadOnly = true,
 		Idempotent = true,
 		Destructive = false,
 		OpenWorld = false)]
 	public async Task<string> FindDefinition(
-		[Description(ParameterDescriptions.SolutionId)] string solutionId,
-		[Description("Usage's .cs file path.")] string filePath,
-		[Description("Usage line.")] int line,
-		[Description("Usage column.")] int column)
+		string solutionId,
+		string filePath,
+		int line,
+		int column)
 	{
 		RoslynInstance instance = await InstanceRegistry.GetOrBeginAsync(solutionId);
 		SolutionModel model = await instance.ReadModelAsync();

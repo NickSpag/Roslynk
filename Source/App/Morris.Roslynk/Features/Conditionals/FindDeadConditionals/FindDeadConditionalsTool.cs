@@ -1,4 +1,3 @@
-using System.ComponentModel;
 using ModelContextProtocol.Server;
 using Morris.Roslynk.Infrastructure.Documentation;
 using Morris.Roslynk.Infrastructure.Lifecycle;
@@ -25,28 +24,16 @@ public sealed class FindDeadConditionalsTool
 		Budget = responseBudget ?? ResponseBudget.Default;
 	}
 
-	[Description("""
-		SupportsPaging=Y
-
-		Finds #if/#elif/#else branches absent from every checked configuration: each project's symbols
-		and those symbols without DEBUG, across loaded frameworks. Results are possible dead code;
-		missing workloads or CI-only defines can cause false positives.
-
-		Header: deadConditionals=<n>. Body grouped by file; leaves: <line:col>,<directive>,<condition>.
-		directive=if|elif|else; condition is the raw expression or '(else)'.
-		Use find_dead_code for unreferenced symbols.
-		""")]
 	[McpServerTool(
 		Name = FindDeadConditionalsName,
-		Title = "Find never-compiled #if branches",
 		ReadOnly = true,
 		Idempotent = true,
 		Destructive = false,
 		OpenWorld = false)]
 	public async Task<string> FindDeadConditionals(
-		[Description(ParameterDescriptions.SolutionId)] string solutionId,
-		[Description(ParameterDescriptions.StartItem)] int startItem = 1,
-		[Description(ParameterDescriptions.MaxSize)] int maxSize = 0)
+		string solutionId,
+		int startItem = 1,
+		int maxSize = 0)
 	{
 		RoslynInstance instance = await InstanceRegistry.GetOrBeginAsync(solutionId);
 		SolutionModel model = await instance.ReadModelAsync();

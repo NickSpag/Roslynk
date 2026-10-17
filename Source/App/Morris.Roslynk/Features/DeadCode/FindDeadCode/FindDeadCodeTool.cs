@@ -1,4 +1,3 @@
-using System.ComponentModel;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.FindSymbols;
 using ModelContextProtocol.Server;
@@ -52,36 +51,19 @@ public sealed class FindDeadCodeTool
 		Budget = responseBudget ?? ResponseBudget.Default;
 	}
 
-	[Description("""
-		SupportsPaging=Y
-
-		Finds unreferenced types/methods/properties/fields/events, conservatively excluding interface
-		implementations, virtual/override chains, tests, generated and DI/reflection-activated members.
-		Excludes public APIs unless includePublic. find_dead_conditionals finds unreachable #if branches.
-
-		Body: project > folder > file > namespace > type; leaves:
-		<memberKind>,<memberName>,<loc>,<confidence>,<reason>, confidence=High|Medium.
-		Dead types have their own leaf/location. loc spans the declaration for apply_patch removal.
-		Unused overloads have separate locations, without parameter lists: get_symbol_body offers
-		candidates. The host decides removals. Scan is per-symbol; narrow large solutions with scope.
-
-		maxResults caps the scan: count is candidates found; truncated=Y may mean the cap stopped scanning.
-		Omit maxResults for a complete scan.
-		""")]
 	[McpServerTool(
 		Name = FindDeadCodeName,
-		Title = "Find unused code",
 		ReadOnly = true,
 		Idempotent = true,
 		Destructive = false,
 		OpenWorld = false)]
 	public async Task<string> FindDeadCode(
-		[Description(ParameterDescriptions.SolutionId)] string solutionId,
-		[Description("Name prefix, e.g. MyApp.Services; omit for the whole solution.")] string? scope = null,
-		[Description("Include unreferenced public/protected members (the API surface).")] bool includePublic = false,
-		[Description("Scan cap; omit for a complete scan.")] int? maxResults = null,
-		[Description(ParameterDescriptions.StartItem)] int startItem = 1,
-		[Description(ParameterDescriptions.MaxSize)] int maxSize = 0)
+		string solutionId,
+		string? scope = null,
+		bool includePublic = false,
+		int? maxResults = null,
+		int startItem = 1,
+		int maxSize = 0)
 	{
 		RoslynInstance instance = await InstanceRegistry.GetOrBeginAsync(solutionId);
 		SolutionModel model = await instance.ReadModelAsync();

@@ -1,4 +1,3 @@
-using System.ComponentModel;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
@@ -39,7 +38,5 @@ public enum MultiQueryOp
 /// argument: the batch carries it once, and every operation runs against the snapshot pinned from it.
 /// </summary>
 public sealed record MultiQueryOperation(
-	[Description("Read-only tool to run.")]
 	MultiQueryOp Tool,
-	[Description("Tool's single-call arguments.")]
 	IReadOnlyDictionary<string, JsonElement>? Arguments = null);

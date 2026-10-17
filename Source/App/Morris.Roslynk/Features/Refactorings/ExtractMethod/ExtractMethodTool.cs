@@ -41,41 +41,22 @@ public sealed class ExtractMethodTool
 		ApplyPipeline = applyPipeline ?? throw new ArgumentNullException(nameof(applyPipeline));
 	}
 
-	[Description("""
-		Extracts contiguous C# statements or one expression into a method/local function, replacing the
-		selection with a call. Roslyn data-flow determines parameters, ref/out, return value, static/async
-		and call-site code. Surrounding whitespace is ignored.
-
-		Additional headers: method (final name), symbolName (usable in name-based tools, e.g.
-		N.T.M(int).NewMethod(string) for a local function), kind (Method|LocalFunction), signature
-		(declaration header), call (statement containing the call).
-
-		Errors:
-		- NotSupported: extraction unavailable, behavior-change warnings, new compile errors (listed),
-		  or generated .g.cs targets (including Razor output).
-		- Conflict: methodName would bind a call to another member.
-		- NotFound: unloaded source file.
-		- Invalid: empty/out-of-range selection or invalid methodName.
-
-		Razor selections outside C# return NotSupported; inserting a method outside @code may be unmappable.
-		""")]
 	[McpServerTool(
 		Name = ExtractMethodName,
-		Title = "Extract a selection into a method",
 		ReadOnly = false,
 		Idempotent = false,
 		Destructive = true,
 		OpenWorld = false)]
 	public async Task<string> ExtractMethod(
-		[Description(ParameterDescriptions.SolutionId)] string solutionId,
-		[Description(ParameterDescriptions.DocumentPath)] string documentPath,
-		[Description("Selection start line.")] int startLine,
-		[Description("Selection start column.")] int startColumn,
-		[Description("Selection end line.")] int endLine,
-		[Description("Selection end column.")] int endColumn,
-		[Description("Extracted method name; omit to keep Roslyn's chosen name.")] string? methodName = null,
-		[Description("Extract as a local function.")] bool asLocalFunction = false,
-		[Description("Preview code and changed paths without writing.")] bool checkOnly = false,
+		string solutionId,
+		string documentPath,
+		int startLine,
+		int startColumn,
+		int endLine,
+		int endColumn,
+		string? methodName = null,
+		bool asLocalFunction = false,
+		bool checkOnly = false,
 		CancellationToken cancellationToken = default)
 	{
 		RoslynInstance instance = await InstanceRegistry.GetOrBeginAsync(solutionId);

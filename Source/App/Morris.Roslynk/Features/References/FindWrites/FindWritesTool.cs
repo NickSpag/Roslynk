@@ -1,4 +1,3 @@
-using System.ComponentModel;
 using ModelContextProtocol.Server;
 using Morris.Roslynk.Infrastructure.Accesses;
 using Morris.Roslynk.Infrastructure.Documentation;
@@ -27,25 +26,18 @@ public sealed class FindWritesTool
 		Budget = responseBudget ?? ResponseBudget.Default;
 	}
 
-	[Description("""
-		SupportsPaging=Y
-
-		Finds writes (assign/compound/increment/ref/out/init) using the shared access contract.
-		Body follows find_references with one location per leaf.
-		""")]
 	[McpServerTool(
 		Name = FindWritesName,
-		Title = "Find writes to a field, property or parameter",
 		ReadOnly = true,
 		Idempotent = true,
 		Destructive = false,
 		OpenWorld = false)]
 	public async Task<string> FindWrites(
-		[Description(ParameterDescriptions.SolutionId)] string solutionId,
-		[Description(OutlineDescriptions.AccessSymbolName)] string symbolName,
-		[Description("Location cap.")] int? maxResults = null,
-		[Description(ParameterDescriptions.StartItem)] int startItem = 1,
-		[Description(ParameterDescriptions.MaxSize)] int maxSize = 0,
+		string solutionId,
+		string symbolName,
+		int? maxResults = null,
+		int startItem = 1,
+		int maxSize = 0,
 		CancellationToken cancellationToken = default)
 	{
 		RoslynInstance instance = await InstanceRegistry.GetOrBeginAsync(solutionId);

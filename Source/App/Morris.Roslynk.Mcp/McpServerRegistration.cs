@@ -1,3 +1,4 @@
+using System.Reflection;
 using ModelContextProtocol.Protocol;
 using ModelContextProtocol.Server;
 using Morris.Roslynk.Mcp.Observability;
@@ -19,8 +20,22 @@ internal static class McpServerRegistration
 		};
 
 		// Shared guidance has one home here; tool attributes carry only their own contracts.
+		// Local builds keep the full guidance inline so tests and local harnesses need no network fetch.
+		// Released builds treat skills/roslynk (SKILL.md + references/tools/<tool>.md) as the single home
+		// and point the harness at the version-tagged copy on GitHub instead.
 		options.ServerInstructions =
-			"""
+#if DEBUG
+			DebugInstructions;
+#else
+			ReleasedInstructions;
+#endif
+
+		options.NameTracesAfterTools();
+	}
+
+	/// <summary>Debug-build instructions: the full shared guidance inline (mirrors skills/roslynk).</summary>
+	private static readonly string DebugInstructions =
+		$$"""
 			Roslynk provides semantic inspection, diagnostics, navigation, references, call graphs,
 			dead-code analysis and edits for .cs/.razor/.cshtml files. Prefer it over grep, source reads,
 			hand edits and dotnet build for semantic questions; use dotnet test for runtime behavior.
@@ -117,8 +132,41 @@ internal static class McpServerRegistration
 			Edits map generated C# to source: unmappable edits return NotSupported; mismatched source,
 			Conflict. Analyzers skip generated Razor; compiler/RZxxxx diagnostics and CS8019/IDE0005
 			unused-using fixes are supported. _Imports.razor/_ViewImports.cshtml usings are never removed.
-			""";
 
-		options.NameTracesAfterTools();
+			## Skill
+
+			Per-tool contracts (descriptions and parameters) are not published in the schema. Install the
+			roslynk skill matching this server version from
+			https://github.com/mrpmorris/Roslynk/tree/{{SkillTag()}}/skills/roslynk
+			(SKILL.md, plus one references/tools/<tool>.md per tool).
+		""";
+
+	/// <summary>
+	/// Released-build instructions: the skills/roslynk folder in the repo is the single home of the
+	/// shared guidance and the per-tool contracts, so the harness is told to install the skill copy
+	/// matching this server's release tag. Exposed internal so tests can assert it from a Debug build.
+	/// </summary>
+	internal static string ReleasedInstructions =>
+		$$"""
+		*.cs, *.razor, *.cshtml semantic intelligence and editing/refactoring via Roslyn.
+
+		Per-tool contracts and shared conventions are not published in the tool schema. Install the
+		roslynk skill matching this server version from
+		https://github.com/mrpmorris/Roslynk/tree/{{SkillTag()}}/skills/roslynk
+		(SKILL.md, plus one references/tools/<tool>.md per tool).
+		""";
+
+	/// <summary>
+	/// The GitHub release tag this build ships from: the package version without its prerelease suffix
+	/// ('0.0.1-local' locally; CI sets the numeric release tag version), matching the tag URLs under
+	/// https://github.com/mrpmorris/Roslynk/tree/&lt;tag&gt;/skills/roslynk.
+	/// </summary>
+	private static string SkillTag()
+	{
+		string version = typeof(McpServerRegistration).Assembly
+			.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion
+			?? "0.0.0";
+		int suffix = version.IndexOfAny(['-', '+']);
+		return suffix >= 0 ? version[..suffix] : version;
 	}
 }

@@ -1,4 +1,3 @@
-using System.ComponentModel;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.Text;
 using ModelContextProtocol.Server;
@@ -25,28 +24,19 @@ public sealed class GetCodeActionsTool
 		CodeActionService = codeActionService ?? throw new ArgumentNullException(nameof(codeActionService));
 	}
 
-	[Description("""
-		Lists fixes/refactorings at a source position or selection. Fixes use compiler/analyzer
-		diagnostics at the span; refactorings use the span itself.
-
-		Returns up to 50 <actionId>,<kind>,<diagnosticId> <title> lines; diagnosticId='-' for refactorings.
-		Unknown documentPath returns NotFound.
-		Razor offers compiler fixes/refactorings; positions outside C# return NotSupported.
-		""")]
 	[McpServerTool(
 		Name = GetCodeActionsName,
-		Title = "List code actions",
 		ReadOnly = true,
 		Idempotent = true,
 		Destructive = false,
 		OpenWorld = false)]
 	public async Task<string> GetCodeActions(
-		[Description(ParameterDescriptions.SolutionId)] string solutionId,
-		[Description(ParameterDescriptions.DocumentPath)] string documentPath,
-		[Description("Position line.")] int line,
-		[Description("Position column.")] int column,
-		[Description("Selection end line.")] int? endLine = null,
-		[Description("Selection end column.")] int? endColumn = null,
+		string solutionId,
+		string documentPath,
+		int line,
+		int column,
+		int? endLine = null,
+		int? endColumn = null,
 		CancellationToken cancellationToken = default)
 	{
 		RoslynInstance instance = await InstanceRegistry.GetOrBeginAsync(solutionId);

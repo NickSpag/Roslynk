@@ -1,4 +1,3 @@
-using System.ComponentModel;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
@@ -32,32 +31,20 @@ public sealed class ChangeSignatureTool
 		ApplyPipeline = applyPipeline ?? throw new ArgumentNullException(nameof(applyPipeline));
 	}
 
-	[Description("""
-		Adds an optional parameter to one ordinary method/local function.
-		Method groups, nameof and cref references remain unchanged. Supports Razor @code declarations
-		and markup calls.
-
-		Errors: NotSupported for virtual/override/abstract, interface members/implementations, partial
-		methods, params methods, constructors or generated-only declarations (names the generator);
-		Invalid for invalid parameter name/type/default; Ambiguous for multiple overloads (candidates).
-
-		Additional headers: resolvedMethod (pre-edit overload with parameter types), updatedCallSites.
-		""")]
 	[McpServerTool(
 		Name = ChangeSignatureName,
-		Title = "Add a parameter to a method",
 		ReadOnly = false,
 		Idempotent = false,
 		Destructive = true,
 		OpenWorld = false)]
 	public async Task<string> ChangeSignature(
-		[Description(ParameterDescriptions.SolutionId)] string solutionId,
-		[Description("Method name.")] string methodId,
-		[Description("New parameter type.")] string parameterType,
-		[Description("New parameter's C# identifier.")] string parameterName,
-		[Description("Required default expression, e.g. default, null, 0.")] string defaultValue,
-		[Description("Named argument expression for all call sites; omit to use the default.")] string? callSiteArgument = null,
-		[Description(ParameterDescriptions.CheckOnly)] bool checkOnly = false)
+		string solutionId,
+		string methodId,
+		string parameterType,
+		string parameterName,
+		string defaultValue,
+		string? callSiteArgument = null,
+		bool checkOnly = false)
 	{
 		RoslynInstance instance = await InstanceRegistry.GetOrBeginAsync(solutionId);
 		SolutionModel model = instance.CurrentModel;

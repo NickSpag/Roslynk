@@ -1,4 +1,3 @@
-using System.ComponentModel;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.Text;
 using ModelContextProtocol.Server;
@@ -40,32 +39,19 @@ public sealed class ApplyCodeFixTool
 		DocumentDiagnostics = documentDiagnostics ?? throw new ArgumentNullException(nameof(documentDiagnostics));
 	}
 
-	[Description("""
-		Fixes the diagnostic containing the supplied position, using its id and location from get_diagnostics.
-
-		Multiple fixes return Conflict with candidate=<actionId>,Fix,<diagnosticId> <title>:
-		choose by title and pass actionId to apply_code_action; do not repeat apply_code_fix.
-
-		Errors: NotFound for an unloaded document or no diagnostic at the position; Invalid for
-		line/column below 1; NotSupported for no registered fix; Conflict for no changes (without candidates).
-		CS8019/IDE0005 fixes remove the @using on that line.
-
-		Additional header: action.
-		""")]
 	[McpServerTool(
 		Name = ApplyCodeFixName,
-		Title = "Apply a diagnostic's fix",
 		ReadOnly = false,
 		Idempotent = false,
 		Destructive = true,
 		OpenWorld = false)]
 	public async Task<string> ApplyCodeFix(
-		[Description(ParameterDescriptions.SolutionId)] string solutionId,
-		[Description(ParameterDescriptions.DocumentPath)] string documentPath,
-		[Description("Diagnostic id, e.g. CS0219/IDE0005.")] string diagnosticId,
-		[Description("Diagnostic line from get_diagnostics.")] int line,
-		[Description("Diagnostic column from get_diagnostics.")] int column,
-		[Description(ParameterDescriptions.CheckOnly)] bool checkOnly = false,
+		string solutionId,
+		string documentPath,
+		string diagnosticId,
+		int line,
+		int column,
+		bool checkOnly = false,
 		CancellationToken cancellationToken = default)
 	{
 		RoslynInstance instance = await InstanceRegistry.GetOrBeginAsync(solutionId);

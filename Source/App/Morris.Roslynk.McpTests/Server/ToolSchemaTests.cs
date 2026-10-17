@@ -109,36 +109,23 @@ public class ToolSchemaTests : IClassFixture<ServerBuilder>
 	}
 
 	[Fact]
-	public void WhenToolsArePublished_ThenTheyPreserveTheirCurrentDescriptions()
+	public void WhenToolsArePublished_ThenTheyHaveNoPublishedDescription()
 	{
-		Dictionary<string, MethodInfo> methods = ToolMethods()
-			.ToDictionary(item => item.ToolName, item => item.Method, StringComparer.Ordinal);
-
+		// Per-tool contracts live in skills/roslynk/references/tools/<tool>.md, not in the published
+		// schema; the wrapper normalizes an absent description to null.
 		foreach (McpServerTool tool in Tools)
-		{
-			string? expected = methods[tool.ProtocolTool.Name]
-				.GetCustomAttribute<System.ComponentModel.DescriptionAttribute>()?.Description;
-			Assert.False(string.IsNullOrWhiteSpace(expected), $"Tool '{tool.ProtocolTool.Name}' has no description.");
-			Assert.Equal(expected, tool.ProtocolTool.Description);
-		}
+			Assert.Null(tool.ProtocolTool.Description);
 	}
 
 	[Fact]
-	public void WhenQueryGuidanceIsPublished_ThenDescriptionsCarryCurrentContracts()
+	public void WhenToolsArePublished_ThenEachHasASkillReferenceFile()
 	{
-		string Normalize(string text) => string.Join(" ", text.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
+		// The skill reference files are the agent-facing contracts; every published tool needs one.
+		string skillToolsDir = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "..", "..", "skills", "roslynk", "references", "tools"));
 
-		string multiQuery = Tools.Single(tool => tool.ProtocolTool.Name == "multi_query").ProtocolTool.Description!;
-		Assert.Contains(
-			"Operations cannot reference each other's output. Batch only queries needed for the question.",
-			Normalize(multiQuery),
-			StringComparison.Ordinal);
-
-		string findReferences = Tools.Single(tool => tool.ProtocolTool.Name == "find_references").ProtocolTool.Description!;
-		Assert.Contains(
-			"Combine with get_callers/get_callees/find_implementations/get_type_hierarchy via multi_query for usage/impact analysis.",
-			Normalize(findReferences),
-			StringComparison.Ordinal);
+		foreach (McpServerTool tool in Tools)
+			Assert.True(File.Exists(Path.Combine(skillToolsDir, tool.ProtocolTool.Name + ".md")),
+				$"Tool '{tool.ProtocolTool.Name}' has no skill reference file.");
 	}
 
 	[Fact]
@@ -159,11 +146,17 @@ public class ToolSchemaTests : IClassFixture<ServerBuilder>
 			Assert.Contains("## " + section, options.ServerInstructions, StringComparison.Ordinal);
 
 		Assert.Contains("saving failures trigger attempted rollback, which may fail", options.ServerInstructions, StringComparison.Ordinal);
+		Assert.Contains("## Skill", options.ServerInstructions, StringComparison.Ordinal);
+		string version = typeof(Morris.Roslynk.Mcp.Hosting.StdioBridge).Assembly.GetCustomAttribute<System.Reflection.AssemblyInformationalVersionAttribute>()!.InformationalVersion;
+		int suffix = version.IndexOfAny(['-', '+']);
+		string expectedTag = suffix >= 0 ? version[..suffix] : version;
+		Assert.Contains($"https://github.com/mrpmorris/Roslynk/tree/{expectedTag}/skills/roslynk", options.ServerInstructions, StringComparison.Ordinal);
 		foreach (McpServerTool tool in Tools)
 		{
-			Assert.DoesNotContain("## Shared paging protocol", tool.ProtocolTool.Description!, StringComparison.Ordinal);
-			Assert.DoesNotContain("## Name grammar", tool.ProtocolTool.Description!, StringComparison.Ordinal);
-			Assert.DoesNotContain("## Output protocol", tool.ProtocolTool.Description!, StringComparison.Ordinal);
+			string? description = tool.ProtocolTool.Description;
+			Assert.DoesNotContain("## Shared paging protocol", description ?? "", StringComparison.Ordinal);
+			Assert.DoesNotContain("## Name grammar", description ?? "", StringComparison.Ordinal);
+			Assert.DoesNotContain("## Output protocol", description ?? "", StringComparison.Ordinal);
 		}
 	}
 

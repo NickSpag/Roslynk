@@ -1,4 +1,3 @@
-using System.ComponentModel;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.Text;
@@ -30,21 +29,15 @@ public sealed class GetSymbolTool
 		ProjectionService = projectionService ?? throw new ArgumentNullException(nameof(projectionService));
 	}
 
-	[Description("""
-		Returns a symbol's declaration without implementation. Source results: project, path and loc
-		headers, then the verbatim declaration before its opening brace or '=>'.
-		Without source: source=metadata, kind, signature and assembly headers.
-		""")]
 	[McpServerTool(
 		Name = GetSymbolName,
-		Title = "Get symbol details",
 		ReadOnly = true,
 		Idempotent = true,
 		Destructive = false,
 		OpenWorld = false)]
 	public async Task<string> GetSymbol(
-		[Description(ParameterDescriptions.SolutionId)] string solutionId,
-		[Description("Symbol name.")] string symbolName,
+		string solutionId,
+		string symbolName,
 		CancellationToken cancellationToken = default)
 	{
 		RoslynInstance instance = await InstanceRegistry.GetOrBeginAsync(solutionId);

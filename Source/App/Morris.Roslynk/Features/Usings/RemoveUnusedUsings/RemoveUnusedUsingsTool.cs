@@ -1,5 +1,4 @@
 using System.Collections.Immutable;
-using System.ComponentModel;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using ModelContextProtocol.Server;
@@ -49,23 +48,16 @@ public sealed class RemoveUnusedUsingsTool
 		DocumentDiagnostics = documentDiagnostics ?? throw new ArgumentNullException(nameof(documentDiagnostics));
 	}
 
-	[Description("""
-		Removes unnecessary using directives (CS8019), solution-wide or in documentPath, including
-		Razor @using lines. Additional header: removedCount.
-		No changes: applied=N, removedCount=0; safe to rerun.
-		NotFound: unloaded source file.
-		""")]
 	[McpServerTool(
 		Name = RemoveUnusedUsingsName,
-		Title = "Remove unused usings",
 		ReadOnly = false,
 		Idempotent = true,
 		Destructive = true,
 		OpenWorld = false)]
 	public async Task<string> RemoveUnusedUsings(
-		[Description(ParameterDescriptions.SolutionId)] string solutionId,
-		[Description("Source file to clean; omit for the whole solution.")] string? documentPath = null,
-		[Description(ParameterDescriptions.CheckOnly)] bool checkOnly = false,
+		string solutionId,
+		string? documentPath = null,
+		bool checkOnly = false,
 		CancellationToken cancellationToken = default)
 	{
 		RoslynInstance instance = await InstanceRegistry.GetOrBeginAsync(solutionId);
