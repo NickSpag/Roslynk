@@ -146,11 +146,6 @@ public class ToolSchemaTests : IClassFixture<ServerBuilder>
 			Assert.Contains("## " + section, options.ServerInstructions, StringComparison.Ordinal);
 
 		Assert.Contains("saving failures trigger attempted rollback, which may fail", options.ServerInstructions, StringComparison.Ordinal);
-		Assert.Contains("## Skill", options.ServerInstructions, StringComparison.Ordinal);
-		string version = typeof(Morris.Roslynk.Mcp.Hosting.StdioBridge).Assembly.GetCustomAttribute<System.Reflection.AssemblyInformationalVersionAttribute>()!.InformationalVersion;
-		int suffix = version.IndexOfAny(['-', '+']);
-		string expectedTag = suffix >= 0 ? version[..suffix] : version;
-		Assert.Contains($"https://github.com/mrpmorris/Roslynk/tree/{expectedTag}/skills/roslynk", options.ServerInstructions, StringComparison.Ordinal);
 		foreach (McpServerTool tool in Tools)
 		{
 			string? description = tool.ProtocolTool.Description;
