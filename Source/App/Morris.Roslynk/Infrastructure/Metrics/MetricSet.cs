@@ -17,12 +17,12 @@ public sealed record MetricSet(
 	public int? ValueOf(MetricKind kind) =>
 		kind switch
 		{
-			MetricKind.MI => MaintainabilityIndex,
-			MetricKind.CC => CyclomaticComplexity,
-			MetricKind.Cpl => ClassCoupling,
-			MetricKind.InhDep => DepthOfInheritance,
-			MetricKind.SL => SourceLines,
-			MetricKind.EL => ExecutableLines,
+			MetricKind.MaintainabilityIndex => MaintainabilityIndex,
+			MetricKind.CyclomaticComplexity => CyclomaticComplexity,
+			MetricKind.ClassCoupling => ClassCoupling,
+			MetricKind.DepthOfInheritance => DepthOfInheritance,
+			MetricKind.SourceLines => SourceLines,
+			MetricKind.ExecutableLines => ExecutableLines,
 			_ => null,
 		};
 }

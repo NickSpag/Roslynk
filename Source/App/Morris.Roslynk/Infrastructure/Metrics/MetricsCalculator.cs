@@ -12,17 +12,17 @@ namespace Morris.Roslynk.Infrastructure.Metrics;
 /// exposes no callable library API, so this is an independent implementation of the documented metrics
 /// over Roslyn syntax trees:
 /// <list type="bullet">
-/// <item>MI (maintainability index): MAX(0, (171 - 5.2*ln(Halstead volume) - 0.23*CC - 16.2*ln(SL)) * 100 / 171),
+/// <item>Maintainability Index: MAX(0, (171 - 5.2*ln(Halstead volume) - 0.23*cyclomatic complexity - 16.2*ln(source lines)) * 100 / 171),
 /// rounded; empty when the declaration contains no operator/operand token (an interface, an enum, an
 /// abstract signature), because the volume is then zero.</item>
-/// <item>CC (cyclomatic complexity): 1 + decision points (if, loops, case/default labels, catch, conditional
+/// <item>Cyclomatic Complexity: 1 + decision points (if, loops, case/default labels, catch, conditional
 /// expression, &amp;&amp;, ||, ??).</item>
-/// <item>Cpl (class coupling): distinct named types referenced by the declaration - identifiers bound to a
+/// <item>Class Coupling: distinct named types referenced by the declaration - identifiers bound to a
 /// type, and members' declaring types - excluding the symbol's own type chain and C# keyword types.</item>
-/// <item>InhDep (depth of inheritance): classes only, counting the class itself and its base classes up to
+/// <item>Depth Of Inheritance: classes only, counting the class itself and its base classes up to
 /// (not including) System.Object.</item>
-/// <item>SL (source lines): lines the declaration spans, summed over its parts.</item>
-/// <item>EL (executable lines): distinct lines carrying a statement or an expression-bodied body.</item>
+/// <item>Source Lines: lines the declaration spans, summed over its parts.</item>
+/// <item>Executable Lines: distinct lines carrying a statement or an expression-bodied body.</item>
 /// </list>
 /// Every figure is measured over the symbol's own declaration span, never by summing its children, so a
 /// namespace or type reports what its whole declaration contains.
@@ -128,7 +128,7 @@ public static class MetricsCalculator
 	}
 
 	/// <summary>
-	/// True for the symbols MI, CC and EL apply to: namespaces, types that can hold bodies, and members that
+	/// True for the symbols maintainability index, cyclomatic complexity and executable lines apply to: namespaces, types that can hold bodies, and members that
 	/// can have one. A field, an enum member or a delegate declaration is not measured for them.
 	/// </summary>
 	private static bool CarriesCode(ISymbol symbol) =>
@@ -253,7 +253,7 @@ public static class MetricsCalculator
 			int operands = OperandCounts.Values.Sum();
 			int distinct = OperatorCounts.Count + OperandCounts.Count;
 
-			// A field, enum member or delegate carries no executable code of its own, so MI/CC/EL do not
+			// A field, enum member or delegate carries no executable code of its own, so maintainability index, cyclomatic complexity and executable lines do not
 			// apply to it even though its declaration has operator and operand tokens.
 			bool carriesCode = CarriesCode(symbol);
 			bool hasCode = carriesCode && (operators + operands > 0 || ExecutableLines.Count > 0);

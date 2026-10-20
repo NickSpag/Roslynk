@@ -272,7 +272,7 @@ The skill directory is watched, so a fresh copy is picked up without restarting 
 > - `find_dead_conditionals`: `#if` branches never compiled under any loaded configuration. Parameter: `solutionId`.
 >
 > **Metrics:**
-> - `get_code_metrics`: Code metrics computed from the loaded in-memory solution — no build, no reload, no emitted assembly. Parameters: `solutionId`, `scope` (namespace/type/member; omit for the whole solution), `projectName`, `kinds` (symbol-kind filter), `filter` (comma-separated ANDed conditions, e.g. `CC>10,MI<65`), `startItem`/`maxSize` (paging), optional `expectSnapshot`. Columns: `Kind,Name,MI,CC,Cpl,InhDep,SL,EL,ParameterTypes`; an empty field means the metric does not apply, and a `~`-prefixed line is an ancestor kept only for context.
+> - `get_code_metrics`: Code metrics computed from the loaded in-memory solution — no build, no reload, no emitted assembly. Parameters: `solutionId`, `scope` (namespace/type/member; omit for the whole solution), `projectName`, `kinds` (symbol-kind filter), `filter` (comma-separated ANDed conditions, e.g. `Cyclomatic Complexity>10,Maintainability Index<65`), `startItem`/`maxSize` (paging), optional `expectSnapshot`. Columns: `Kind,Name,Maintainability Index,Cyclomatic Complexity,Class Coupling,Depth Of Inheritance,Source Lines,Executable Lines,Parameter Types`; an empty field means the metric does not apply, and a `~`-prefixed line is an ancestor kept only for context.
 >
 > **Conventions:** most tools take a fully-qualified `Namespace.Type.Member` name (no `global::`); a generic
 > type may be written without its type parameters (`Namespace.Box`) when only one arity exists — several

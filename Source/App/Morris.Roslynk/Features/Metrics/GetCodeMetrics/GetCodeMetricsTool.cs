@@ -20,7 +20,7 @@ public sealed class GetCodeMetricsTool
 	/// <summary>Marks an ancestor line kept only for context: it did not match the scope's filters.</summary>
 	private const string ContextMarker = "~";
 
-	private const string Columns = "Kind,Name,MI,CC,Cpl,InhDep,SL,EL,ParameterTypes";
+	private const string Columns = "Kind,Name,Maintainability Index,Cyclomatic Complexity,Class Coupling,Depth Of Inheritance,Source Lines,Executable Lines,Parameter Types";
 
 	private const string GlobalNamespaceName = "<global>";
 
@@ -50,17 +50,15 @@ public sealed class GetCodeMetricsTool
 		Budget = responseBudget ?? ResponseBudget.Default;
 	}
 
-	[Description("""
+	[Description($"""
 		SupportsPaging=Y
 
 		Reports code metrics computed from the loaded in-memory solution - no build, no reload, no emitted
 		assembly. Metrics reflect the loaded configuration; inactive #if branches are not measured.
 
 		Body: project > namespace > nested namespace > type > nested type > member > local function.
-		Leaves: <kind>,<name>,<MI>,<CC>,<Cpl>,<InhDep>,<SL>,<EL>,<parameterTypes>.
-		MI=maintainability index, CC=cyclomatic complexity, Cpl=class coupling, InhDep=depth of
-		inheritance, SL=source lines, EL=executable lines. An empty field means the metric does not apply
-		to that symbol (MI/CC/EL when the declaration has no code, InhDep outside classes). Every figure is
+		Leaves: {Columns}. An empty field means the metric does not apply to that symbol (maintainability index, cyclomatic complexity and executable
+		lines when the declaration has no code; depth of inheritance outside classes). Every figure is
 		measured over the symbol's own declaration span, never a sum of its children.
 
 		Parameter types appear only to disambiguate overloads declared in the symbol's own type, as a
@@ -71,7 +69,8 @@ public sealed class GetCodeMetricsTool
 
 		scope: a namespace/type/member name (fully qualified or a uniquely matching dotted suffix);
 		projectName: one project; kinds: symbol-kind filter; omit all for the whole solution.
-		filter: comma-separated conditions, all ANDed, e.g. 'CC>10,MI<65' (operators >, >=, <, <=, =).
+		filter: comma-separated conditions, all ANDed, e.g. 'Cyclomatic Complexity>10,Maintainability Index<65'
+		(metric names as in the columns header, spaces and case optional; operators >, >=, <, <=, =).
 		Filters apply to matching symbols only and are applied before paging; ancestors are never counted.
 		""")]
 	[McpServerTool(
@@ -86,7 +85,7 @@ public sealed class GetCodeMetricsTool
 		[Description("Namespace, type or member to measure (fully qualified, or a uniquely matching dotted suffix); omit for the whole solution.")] string? scope = null,
 		[Description("Limit to one project by name, e.g. Morris.Roslynk; omit for every project.")] string? projectName = null,
 		[Description("Symbol kinds to report, e.g. ['method','class']; omit for every kind.")] string[]? kinds = null,
-		[Description("Metric conditions, comma-separated and ANDed, e.g. 'CC>10,MI<65'. Metrics: MI, CC, Cpl, InhDep, SL, EL; operators: >, >=, <, <=, =.")] string? filter = null,
+		[Description("Metric conditions, comma-separated and ANDed, e.g. 'Cyclomatic Complexity>10,Maintainability Index<65'. Metrics: Maintainability Index, Cyclomatic Complexity, Class Coupling, Depth Of Inheritance, Source Lines, Executable Lines (spaces and case optional); operators: >, >=, <, <=, =.")] string? filter = null,
 		[Description(ParameterDescriptions.StartItem)] int startItem = 1,
 		[Description(ParameterDescriptions.MaxSize)] int maxSize = 0,
 		[Description("Previous snapshot id; mismatch returns Stale before measuring.")] string? expectSnapshot = null,

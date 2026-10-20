@@ -2,15 +2,18 @@ using System.Globalization;
 
 namespace Morris.Roslynk.Infrastructure.Metrics;
 
-/// <summary>The metric a condition tests, named exactly as the output's column header names it.</summary>
+/// <summary>
+/// The metric a condition tests. Each name is the output's column header with the spaces removed; a filter may
+/// write it either way, in any case ('Class Coupling' or 'classcoupling').
+/// </summary>
 public enum MetricKind
 {
-	MI,
-	CC,
-	Cpl,
-	InhDep,
-	SL,
-	EL,
+	MaintainabilityIndex,
+	CyclomaticComplexity,
+	ClassCoupling,
+	DepthOfInheritance,
+	SourceLines,
+	ExecutableLines,
 }
 
 public enum MetricComparison
@@ -23,8 +26,8 @@ public enum MetricComparison
 }
 
 /// <summary>
-/// One 'CC>10'-style condition. It matches only when the metric applies to the symbol: a condition on a
-/// metric the symbol does not carry (a field's CC, a struct's InhDep) never matches, rather than treating
+/// One 'Cyclomatic Complexity>10'-style condition. It matches only when the metric applies to the symbol: a condition on a
+/// metric the symbol does not carry (a field's cyclomatic complexity, a struct's depth of inheritance) never matches, rather than treating
 /// the absent value as zero.
 /// </summary>
 public sealed record MetricCondition(MetricKind Kind, MetricComparison Comparison, int Value)
@@ -47,7 +50,7 @@ public sealed record MetricCondition(MetricKind Kind, MetricComparison Compariso
 }
 
 /// <summary>
-/// Parses the metric filter: comma-separated conditions, all ANDed together, e.g. <c>CC&gt;10,MI&lt;65</c>.
+/// Parses the metric filter: comma-separated conditions, all ANDed together, e.g. <c>Cyclomatic Complexity&gt;10,Maintainability Index&lt;65</c>.
 /// There is no OR and no grouping - one condition per comma - and an empty or omitted filter matches every
 /// symbol. An unrecognized metric name, operator or value is a caller error (ArgumentException), which the
 /// tool maps to <c>error=Invalid</c>.
@@ -100,16 +103,17 @@ public static class MetricFilter
 		}
 
 		if (index < 0)
-			throw new ArgumentException($"Metric condition '{text}' has no comparison. Write e.g. 'CC>10' or 'MI<65'.");
+			throw new ArgumentException($"Metric condition '{text}' has no comparison. Write e.g. 'Cyclomatic Complexity>10' or 'Maintainability Index<65'.");
 
 		string name = text[..index].Trim();
+		string enumName = name.Replace(" ", "", StringComparison.Ordinal);
 		string valueText = text[(index + length)..].Trim();
 
-		if (name.Length == 0 || !char.IsLetter(name[0])
-			|| !Enum.TryParse(name, ignoreCase: true, out MetricKind kind)
+		if (enumName.Length == 0 || !char.IsLetter(enumName[0])
+			|| !Enum.TryParse(enumName, ignoreCase: true, out MetricKind kind)
 			|| !Enum.IsDefined(kind))
 		{
-			throw new ArgumentException($"Unknown metric '{name}' in '{text}'. Metrics: MI, CC, Cpl, InhDep, SL, EL.");
+			throw new ArgumentException($"Unknown metric '{name}' in '{text}'. Metrics: Maintainability Index, Cyclomatic Complexity, Class Coupling, Depth Of Inheritance, Source Lines, Executable Lines.");
 		}
 
 		if (!int.TryParse(valueText, NumberStyles.Integer, CultureInfo.InvariantCulture, out int value))
