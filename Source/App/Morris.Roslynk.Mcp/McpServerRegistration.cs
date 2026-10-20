@@ -34,9 +34,12 @@ internal static class McpServerRegistration
 			## Lifecycle
 
 			open_solution returns solutionId; it waits for the initial load by default (noWait=true pre-warms in
-			the background). Every solution tool waits server-side for an in-flight load up to the configured
-			timeout; only if that elapses does it return error=Indexing (with projects=loaded/?), and then you
-			should retry rather than read or edit files directly.
+			the background). When you need several solutions in this turn, call open_solution concurrently
+			for each (don't wait for one result before sending the next) so the loads run in parallel; every
+			solution tool also opens implicitly, so open only the solutions you query in this turn. Every
+			solution tool waits server-side for an in-flight load up to the configured timeout; only if that
+			elapses does it return error=Indexing (with projects=loaded/?), and then you should retry rather
+			than read or edit files directly.
 			The watcher folds edits, including yours. Never initiate reload_solution; suggest it after
 			branch switches, restore, SDK/build-property changes.
 
