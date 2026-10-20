@@ -271,6 +271,9 @@ The skill directory is watched, so a fresh copy is picked up without restarting 
 > - `find_dead_code`: Unreferenced members with a confidence and a reason — candidates, never verdicts; it deletes nothing. Parameters: `solutionId`, `scope` (FQN prefix; use it on large solutions), `includePublic`, `maxSize` (scan cap).
 > - `find_dead_conditionals`: `#if` branches never compiled under any loaded configuration. Parameter: `solutionId`.
 >
+> **Metrics:**
+> - `get_code_metrics`: Code metrics computed from the loaded in-memory solution — no build, no reload, no emitted assembly. Parameters: `solutionId`, `scope` (namespace/type/member; omit for the whole solution), `projectName`, `kinds` (symbol-kind filter), `filter` (comma-separated ANDed conditions, e.g. `CC>10,MI<65`), `startItem`/`maxSize` (paging), optional `expectSnapshot`. Columns: `Kind,Name,MI,CC,Cpl,InhDep,SL,EL,ParameterTypes`; an empty field means the metric does not apply, and a `~`-prefixed line is an ancestor kept only for context.
+>
 > **Conventions:** most tools take a fully-qualified `Namespace.Type.Member` name (no `global::`); a generic
 > type may be written without its type parameters (`Namespace.Box`) when only one arity exists — several
 > arities are `error=Ambiguous` with one candidate per arity, and spellings like ``Namespace.Box`1`` or
