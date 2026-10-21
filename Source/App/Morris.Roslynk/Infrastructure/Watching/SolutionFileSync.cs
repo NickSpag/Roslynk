@@ -89,6 +89,50 @@ public SolutionFileSync(RoslynInstance instance)
 			ProjectDirectories = CaptureProjectDirectories(instance.CurrentSolution);
 		}
 
+	/// <summary>
+	/// A watcher reported an error, classified by the error rather than by when it arrived (.NET 10 raises a
+	/// Linux add-watch failure synchronously while starting, .NET 11 asynchronously after). An OS resource limit
+	/// (the inotify watch or instance limit: ENOSPC, EMFILE, ENFILE) is one a reload would meet again, so it is
+	/// recorded in <paramref name="diagnostics"/> for get_solution_status and never dirties the instance. Dropped
+	/// events mean the changes are unknown, so the instance is marked dirty. Any other error is recorded when
+	/// raised while its watcher was starting, when the same error is already recorded, or when it already forced a
+	/// reload (in an earlier watcher of this instance); otherwise it may mean that watcher stopped (on Windows, or
+	/// on .NET 11, its directory was deleted or moved), so the instance is marked dirty and the next use reloads
+	/// it from disk with a fresh watcher. A failure that persists therefore costs at most one reload, then is
+	/// recorded, whether a fresh watcher meets it while starting or after. On .NET 10, Linux and macOS raise no
+	/// error for a deleted or moved watched directory: that watcher stops silently until something else triggers
+	/// a reload.
+	/// </summary>
+	public void OnWatcherError(WatchDiagnostics diagnostics, string directory, Exception error, bool whileStarting)
+	{
+		bool resourceLimit = IsResourceLimit(error);
+		if (!resourceLimit && IsDroppedEvents(error, whileStarting))
+		{
+			Instance.MarkDirty();
+			return;
+		}
+
+		if (resourceLimit || whileStarting || diagnostics.Contains(error.Message) || !Instance.TryClaimWatchErrorReload(error.Message))
+		{
+			diagnostics.Record(error.Message, directory);
+			return;
+		}
+
+		Instance.MarkDirty();
+	}
+
+	/// <summary>ENOSPC (watches), EMFILE and ENFILE (instances): the inotify limits, which a reload cannot fix.</summary>
+	private static bool IsResourceLimit(Exception error) =>
+		!OperatingSystem.IsWindows() && error is IOException { HResult: 28 or 24 or 23 };
+
+	/// <summary>
+	/// An overflow; on macOS, dropped events (a rescan the OS asks for) arrive as a plain <see cref="IOException"/>
+	/// from a running watcher rather than as <see cref="InternalBufferOverflowException"/>.
+	/// </summary>
+	private static bool IsDroppedEvents(Exception error, bool whileStarting) =>
+		error is InternalBufferOverflowException
+		|| (OperatingSystem.IsMacOS() && !whileStarting && error.GetType() == typeof(IOException));
+
 		/// <summary>
 		/// The directories to watch: every project directory recursively (for new globbed files), plus the
 		/// distinct out-of-tree directories that host a linked document or an ancestor build file, watched
