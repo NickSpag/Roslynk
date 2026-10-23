@@ -84,7 +84,7 @@ Semantic edits normally compute an immutable updated solution and call `ApplyPip
 
 Be precise about the guarantee: individual replacements are atomic, and the code implements rollback across a batch; this is not a filesystem transaction visible atomically to external readers or crash recovery. Staging happens before the commit try/finally, so a staging failure/cancellation can leave temp files. Rollback can itself fail, and there is no cross-process lock between disk validation and replacement. Do not strengthen these claims in tool documentation without changing implementation and testing failure cases.
 
-Encoding is path-specific: `AtomicFileWriter` accepts an explicit encoding and defaults to UTF-8 without BOM. `ApplyPipeline` currently creates `PendingWrite` without carrying the document encoding; `ApplyPatchTool` explicitly preserves recognized UTF-8/UTF-16 BOM encodings. Do not assume all write tools preserve encoding identically.
+Encoding is path-specific: `AtomicFileWriter` accepts an explicit encoding and defaults to UTF-8 without BOM. `FileEncoding.Detect` maps a file's UTF-8/UTF-16 BOM (or its absence) to the encoding to write it back with, and both write paths pass that to `PendingWrite`: `ApplyPipeline` when it re-reads each file for its stale check, decoding leniently as `File.ReadAllText` does, and `ApplyPatchTool`, which decodes strictly so a BOM-less file that is not valid UTF-8 is rejected as not text. Keep the two decoding policies distinct.
 
 ### Patch-specific path
 

@@ -1,4 +1,5 @@
-﻿using Morris.Roslynk.Features.References.RenameSymbol;
+﻿using System.Text;
+using Morris.Roslynk.Features.References.RenameSymbol;
 using Morris.Roslynk.Infrastructure.Lifecycle;
 using Morris.Roslynk.Infrastructure.Projections;
 using Morris.Roslynk.Infrastructure.Resolution;
@@ -113,5 +114,45 @@ public class RenameSymbolTests
 		Assert.Contains("class Box<T>", generics);
 		Assert.DoesNotContain("Crate", generics);
 	}
+
+	[Fact]
+	public async Task WhenARenamedFileHasAUtf8Bom_ThenTheBomIsPreserved()
+	{
+		string solutionPath = TestSolutions.CreateScratchSimpleSolution();
+		string greeterPath = Path.Combine(Path.GetDirectoryName(solutionPath)!, "SimpleLibrary", "Greeter.cs");
+		await File.WriteAllTextAsync(greeterPath, await File.ReadAllTextAsync(greeterPath), new UTF8Encoding(encoderShouldEmitUTF8Identifier: true));
+
+		using var registry = new InstanceRegistry();
+		await registry.GetOrAddAsync(solutionPath);
+		var subject = new RenameSymbolTool(registry, new SymbolResolver(), new ProjectionService(), new ApplyPipeline());
+
+		string result = await subject.RenameSymbol(solutionPath, "SimpleLibrary.Greeter", "Welcomer");
+
+		Assert.Contains("applied=Y", result);
+		byte[] greeter = await File.ReadAllBytesAsync(greeterPath);
+		Assert.Equal(Utf8Bom, greeter.Take(Utf8Bom.Length));
+		Assert.NotEqual(Utf8Bom, greeter.Skip(Utf8Bom.Length).Take(Utf8Bom.Length));
+		Assert.Contains("class Welcomer", Encoding.UTF8.GetString(greeter));
+	}
+
+	[Fact]
+	public async Task WhenARenamedFileHasNoBom_ThenNoBomIsAdded()
+	{
+		string solutionPath = TestSolutions.CreateScratchSimpleSolution();
+		string callerPath = Path.Combine(Path.GetDirectoryName(solutionPath)!, "SimpleLibrary", "Caller.cs");
+
+		using var registry = new InstanceRegistry();
+		await registry.GetOrAddAsync(solutionPath);
+		var subject = new RenameSymbolTool(registry, new SymbolResolver(), new ProjectionService(), new ApplyPipeline());
+
+		string result = await subject.RenameSymbol(solutionPath, "SimpleLibrary.Greeter", "Welcomer");
+
+		Assert.Contains("applied=Y", result);
+		byte[] caller = await File.ReadAllBytesAsync(callerPath);
+		Assert.NotEqual(Utf8Bom, caller.Take(Utf8Bom.Length));
+		Assert.Contains("new Welcomer()", Encoding.UTF8.GetString(caller));
+	}
+
+	private static readonly byte[] Utf8Bom = [0xEF, 0xBB, 0xBF];
 
 }

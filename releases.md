@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Semantic write tools (`rename_symbol`, `rename_parameter`, `change_signature`, `extract_method`, `remove_unused_usings`, `apply_code_fix`, `apply_code_action`) keep each rewritten file's BOM-declared encoding instead of rewriting it as UTF-8 without a BOM, so a `.cs`/`.razor` file with a UTF-8 BOM keeps it and a BOM-less file still gains none (Fixes #162)
 - Every paging tool accepts `countOnly=true`, returning the headers plus `count=` and one `count.<kind>=` line per kind present instead of the body, with no `truncated=`/`nextStartItem=` and `startItem`/`maxSize` page limits ignored (`get_diagnostics`' row cap and `find_dead_code`'s scan cap still apply) (Fixes #153)
 - `get_members` no longer lists property/event accessors as `method` leaves: each property/event appears once as its own leaf, so `includeMethods` covers ordinary methods, constructors and local functions (Fixes #149)
 - `search_symbols`' `query` parameter is renamed to `symbolNameFilter`, a breaking rename that states it matches a symbol's own name rather than free text (Fixes #152)

@@ -1,4 +1,5 @@
 ﻿using System.Diagnostics;
+using System.Text;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.Text;
 using Morris.Roslynk.Infrastructure.Lifecycle;
@@ -166,11 +167,22 @@ public sealed class ApplyPipeline
 			return;
 
 		string loadedText = (await currentDocument.GetTextAsync(cancellationToken)).ToString();
-		string diskText = await File.ReadAllTextAsync(path, cancellationToken);
+		(string diskText, Encoding encoding) = await ReadWithEncodingAsync(path, cancellationToken);
 		if (!string.Equals(FileHash.Of(loadedText), FileHash.Of(diskText), StringComparison.Ordinal))
 			throw new StaleWriteException(path);
 
 		string updatedText = (await updatedDocument.GetTextAsync(cancellationToken)).ToString();
-		writes.Add(new PendingWrite(path, updatedText));
+		writes.Add(new PendingWrite(path, updatedText, encoding));
+	}
+
+	/// <summary>Reads a file with the encoding its BOM declares, also returning that encoding so the rewrite keeps
+	/// the preamble. Invalid bytes decode leniently, as <see cref="File.ReadAllTextAsync(string, CancellationToken)"/>
+	/// does, so a file Roslyn loaded with another code page fails the stale check instead of throwing.</summary>
+	private static async Task<(string Text, Encoding Encoding)> ReadWithEncodingAsync(string path, CancellationToken cancellationToken)
+	{
+		byte[] bytes = await File.ReadAllBytesAsync(path, cancellationToken);
+		Encoding encoding = FileEncoding.Detect(bytes);
+		int preambleLength = encoding.Preamble.Length;
+		return (encoding.GetString(bytes, preambleLength, bytes.Length - preambleLength), encoding);
 	}
 }

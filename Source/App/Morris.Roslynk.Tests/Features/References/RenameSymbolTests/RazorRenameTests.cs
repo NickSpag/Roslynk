@@ -1,3 +1,4 @@
+using System.Text;
 using Morris.Roslynk.Features.Diagnostics.GetDiagnostics;
 using Morris.Roslynk.Features.References.FindReferences;
 using Morris.Roslynk.Features.References.RenameSymbol;
@@ -336,5 +337,26 @@ public class RazorRenameTests
 		Assert.Contains("error=NotSupported", preview);
 		Assert.Contains("error=NotSupported", applied);
 		Assert.Equal(before, await ReadSourcesAsync(directory));
+	}
+
+	[Fact]
+	public async Task WhenARenamedRazorFileHasAUtf8Bom_ThenTheBomIsPreserved()
+	{
+		string solutionPath = TestSolutions.CreateScratchRazorSolution();
+		string counterPath = Path.Combine(Path.GetDirectoryName(solutionPath)!, "RazorLib", "Counter.razor");
+		await File.WriteAllTextAsync(counterPath, await File.ReadAllTextAsync(counterPath), new UTF8Encoding(encoderShouldEmitUTF8Identifier: true));
+
+		using var registry = new InstanceRegistry();
+		await registry.GetOrAddAsync(solutionPath);
+		RenameSymbolTool subject = CreateSubject(registry);
+
+		string result = await subject.RenameSymbol(solutionPath, "RazorLib.Counter.CurrentCount", "Total");
+
+		Assert.Contains("applied=Y", result);
+		byte[] counter = await File.ReadAllBytesAsync(counterPath);
+		byte[] bom = [0xEF, 0xBB, 0xBF];
+		Assert.Equal(bom, counter.Take(bom.Length));
+		Assert.NotEqual(bom, counter.Skip(bom.Length).Take(bom.Length));
+		Assert.Contains("private int Total;", Encoding.UTF8.GetString(counter));
 	}
 }

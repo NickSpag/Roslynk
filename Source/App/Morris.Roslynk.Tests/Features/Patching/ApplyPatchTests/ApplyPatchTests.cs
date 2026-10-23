@@ -140,6 +140,63 @@ public class ApplyPatchTests
 	}
 
 	[Fact]
+	public async Task WhenAPatchedFileHasAUtf8Bom_ThenTheBomIsPreserved()
+	{
+		string solutionPath = TestSolutions.CreateScratchSimpleSolution();
+		string greeter = FindFile(solutionPath, "Greeter.cs");
+		string original = await File.ReadAllTextAsync(greeter);
+		await File.WriteAllTextAsync(greeter, original, new UTF8Encoding(encoderShouldEmitUTF8Identifier: true));
+		using var registry = new InstanceRegistry();
+		await registry.GetOrAddAsync(solutionPath);
+		var subject = new ApplyPatchTool(registry);
+
+		string result = await subject.ApplyPatch(solutionPath, BuildFullReplacePatch(GreeterRelativePath, original, original + "// patched\n"));
+
+		Assert.Contains("applied=Y", result);
+		byte[] bytes = await File.ReadAllBytesAsync(greeter);
+		Assert.Equal(new byte[] { 0xEF, 0xBB, 0xBF }, bytes.Take(3));
+		Assert.NotEqual(new byte[] { 0xEF, 0xBB, 0xBF }, bytes.Skip(3).Take(3));
+		Assert.Contains("// patched", Encoding.UTF8.GetString(bytes));
+	}
+
+	[Fact]
+	public async Task WhenAPatchedFileIsUtf16WithABom_ThenItStaysUtf16()
+	{
+		string solutionPath = TestSolutions.CreateScratchSimpleSolution();
+		using var registry = new InstanceRegistry();
+		await registry.GetOrAddAsync(solutionPath);
+		var subject = new ApplyPatchTool(registry);
+
+		string notes = Path.Combine(Path.GetDirectoryName(solutionPath)!, "SimpleLibrary", "notes.txt");
+		await File.WriteAllTextAsync(notes, "first\n", Encoding.Unicode);
+
+		string result = await subject.ApplyPatch(solutionPath, BuildFullReplacePatch("SimpleLibrary/notes.txt", "first\n", "second\n"));
+
+		Assert.Contains("applied=Y", result);
+		byte[] bytes = await File.ReadAllBytesAsync(notes);
+		Assert.Equal(new byte[] { 0xFF, 0xFE }, bytes.Take(2));
+		Assert.Equal("second\n", Encoding.Unicode.GetString(bytes, 2, bytes.Length - 2));
+	}
+
+	[Fact]
+	public async Task WhenAFileWithoutABomIsNotValidUtf8_ThenItIsNotSupported()
+	{
+		string solutionPath = TestSolutions.CreateScratchSimpleSolution();
+		using var registry = new InstanceRegistry();
+		await registry.GetOrAddAsync(solutionPath);
+		var subject = new ApplyPatchTool(registry);
+
+		string notes = Path.Combine(Path.GetDirectoryName(solutionPath)!, "SimpleLibrary", "notes.txt");
+		File.WriteAllBytes(notes, [0x41, 0xC3, 0x28, 0x0A]);
+		string patch = BuildFullReplacePatch("SimpleLibrary/notes.txt", "A�(\n", "x\n");
+
+		string result = await subject.ApplyPatch(solutionPath, patch);
+
+		Assert.Contains("error=NotSupported", result);
+		Assert.Equal(new byte[] { 0x41, 0xC3, 0x28, 0x0A }, await File.ReadAllBytesAsync(notes));
+	}
+
+	[Fact]
 	public async Task WhenThePatchTargetsAFileUnderObj_ThenItIsNotSupported()
 	{
 		string solutionPath = TestSolutions.CreateScratchSimpleSolution();

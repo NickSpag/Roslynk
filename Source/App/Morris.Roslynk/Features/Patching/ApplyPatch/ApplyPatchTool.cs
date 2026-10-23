@@ -326,29 +326,25 @@ public sealed class ApplyPatchTool
 	private static (string Text, Encoding Encoding) ReadTextPreservingEncoding(string path)
 	{
 		byte[] bytes = File.ReadAllBytes(path);
+		Encoding encoding = FileEncoding.Detect(bytes);
+		int preambleLength = encoding.Preamble.Length;
 
-		if (bytes.Length >= 3 && bytes[0] == 0xEF && bytes[1] == 0xBB && bytes[2] == 0xBF)
-			return (StrictUtf8.GetString(bytes, 3, bytes.Length - 3), new UTF8Encoding(encoderShouldEmitUTF8Identifier: true));
-
-		if (bytes.Length >= 2 && bytes[0] == 0xFF && bytes[1] == 0xFE)
-			return (DecodeUtf16(bytes, bigEndian: false), new UnicodeEncoding(bigEndian: false, byteOrderMark: true));
-
-		if (bytes.Length >= 2 && bytes[0] == 0xFE && bytes[1] == 0xFF)
-			return (DecodeUtf16(bytes, bigEndian: true), new UnicodeEncoding(bigEndian: true, byteOrderMark: true));
-
-		return (StrictUtf8.GetString(bytes), new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
+		string text = encoding is UnicodeEncoding
+			? DecodeUtf16(bytes, encoding)
+			: StrictUtf8.GetString(bytes, preambleLength, bytes.Length - preambleLength);
+		return (text, encoding);
 	}
 
 	private static readonly UTF8Encoding StrictUtf8 = new(encoderShouldEmitUTF8Identifier: false, throwOnInvalidBytes: true);
 
-	private static string DecodeUtf16(byte[] bytes, bool bigEndian)
+	private static string DecodeUtf16(byte[] bytes, Encoding utf16)
 	{
-		int preambleLength = 2;
+		int preambleLength = utf16.Preamble.Length;
 		// UTF-16 encodes two bytes per code unit; a trailing lone byte is corrupt, treat the file as not text.
 		if ((bytes.Length - preambleLength) % 2 != 0)
 			throw new DecoderFallbackException("A UTF-16 file has an odd number of bytes after its BOM.");
 
-		return new UnicodeEncoding(bigEndian, byteOrderMark: false).GetString(bytes, preambleLength, bytes.Length - preambleLength);
+		return utf16.GetString(bytes, preambleLength, bytes.Length - preambleLength);
 	}
 
 	/// <summary>Why a patch path was rejected, ordered by how actionable the error code is.</summary>
