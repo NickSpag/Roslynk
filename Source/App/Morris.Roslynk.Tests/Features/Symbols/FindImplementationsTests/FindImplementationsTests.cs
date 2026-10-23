@@ -10,8 +10,7 @@ public class FindImplementationsTests
 	[Fact]
 	public async Task WhenAnInterfaceIsRequested_ThenItsImplementorsAreReturned()
 	{
-		using var registry = new InstanceRegistry();
-		await registry.GetOrAddAsync(TestSolutions.Simple);
+		var registry = await TestSolutions.SharedAsync(TestSolutions.Simple);
 		var subject = new FindImplementationsTool(registry, new SymbolResolver(), new ProjectionService());
 
 		string result = await subject.FindImplementations(TestSolutions.Simple, "SimpleLibrary.IGreeter");
@@ -38,8 +37,7 @@ public class FindImplementationsTests
 	[Fact]
 	public async Task WhenTheNameMatchesSeveralOverloads_ThenAmbiguousIsReturnedWithDistinguishableCandidates()
 	{
-		using var registry = new InstanceRegistry();
-		await registry.GetOrAddAsync(TestSolutions.Simple);
+		var registry = await TestSolutions.SharedAsync(TestSolutions.Simple);
 		var subject = new FindImplementationsTool(registry, new SymbolResolver(), new ProjectionService());
 
 		string result = await subject.FindImplementations(TestSolutions.Simple, "SimpleLibrary.Ledger.Add");

@@ -1,4 +1,4 @@
-using Morris.Roslynk.Features.Refactorings.ExtractMethod;
+﻿using Morris.Roslynk.Features.Refactorings.ExtractMethod;
 using Morris.Roslynk.Infrastructure.Lifecycle;
 using Morris.Roslynk.Infrastructure.Writing;
 
@@ -153,8 +153,7 @@ public class ExtractMethodTests
 	[InlineData("two words")]
 	public async Task WhenTheMethodNameIsInvalid_ThenInvalidIsReturned(string methodName)
 	{
-		using var registry = new InstanceRegistry();
-		await registry.GetOrAddAsync(TestSolutions.Simple);
+		var registry = await TestSolutions.SharedAsync(TestSolutions.Simple);
 		var subject = new ExtractMethodTool(registry, new ApplyPipeline());
 
 		string result = await subject.ExtractMethod(TestSolutions.Simple, "SimpleLibrary/Greeter.cs", 1, 1, 1, 2, methodName: methodName);
@@ -165,8 +164,7 @@ public class ExtractMethodTests
 	[Fact]
 	public async Task WhenTheSelectionIsOutsideTheDocument_ThenInvalidIsReturned()
 	{
-		using var registry = new InstanceRegistry();
-		await registry.GetOrAddAsync(TestSolutions.Simple);
+		var registry = await TestSolutions.SharedAsync(TestSolutions.Simple);
 		var subject = new ExtractMethodTool(registry, new ApplyPipeline());
 
 		string result = await subject.ExtractMethod(TestSolutions.Simple, "SimpleLibrary/Greeter.cs", 1, 1, 9999, 1);
@@ -177,8 +175,7 @@ public class ExtractMethodTests
 	[Fact]
 	public async Task WhenTheDocumentIsNotInTheSolution_ThenNotFoundIsReturned()
 	{
-		using var registry = new InstanceRegistry();
-		await registry.GetOrAddAsync(TestSolutions.Simple);
+		var registry = await TestSolutions.SharedAsync(TestSolutions.Simple);
 		var subject = new ExtractMethodTool(registry, new ApplyPipeline());
 
 		string result = await subject.ExtractMethod(TestSolutions.Simple, "Nope.cs", 1, 1, 1, 2);

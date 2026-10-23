@@ -80,8 +80,7 @@ public class FindDeadCodeTests
 	[Fact]
 	public async Task WhenCountOnlyIsRequested_ThenMaxSizeStillCapsTheScanAndNoLeavesAreReturned()
 	{
-		using var registry = new InstanceRegistry();
-		await registry.GetOrAddAsync(TestSolutions.Simple);
+		var registry = await TestSolutions.SharedAsync(TestSolutions.Simple);
 		var subject = new FindDeadCodeTool(registry);
 
 		string capped = await subject.FindDeadCode(
@@ -105,8 +104,7 @@ public class FindDeadCodeTests
 
 	private static async Task<string> RunAsync(string? scope = null, bool includePublic = false)
 	{
-		using var registry = new InstanceRegistry();
-		await registry.GetOrAddAsync(TestSolutions.Simple);
+		var registry = await TestSolutions.SharedAsync(TestSolutions.Simple);
 		var subject = new FindDeadCodeTool(registry);
 
 		return await subject.FindDeadCode(TestSolutions.Simple, scope, includePublic);

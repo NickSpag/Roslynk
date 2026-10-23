@@ -1,16 +1,43 @@
-using Morris.Roslynk.Features.Diagnostics.GetDiagnostics;
+﻿using Morris.Roslynk.Features.Diagnostics.GetDiagnostics;
 using Morris.Roslynk.Infrastructure.Diagnostics;
 using Morris.Roslynk.Infrastructure.Lifecycle;
+using Morris.Roslynk.Infrastructure.Watching;
 
 namespace Morris.Roslynk.Tests.Features.Diagnostics.GetDiagnosticsTests;
 
-public class GetDiagnosticsTests
+public class GetDiagnosticsTests : IAsyncLifetime
 {
+	private static readonly (string Fixture, string File)[] Fixtures =
+	[
+		("SimpleSolution", "SimpleSolution.slnx"),
+		("RazorSolution", "RazorSolution.slnx"),
+		("MultiTargetSolution", Path.Combine("src", "MultiTarget.slnx")),
+	];
+
+	public async Task InitializeAsync()
+	{
+		foreach ((string fixture, string file) in Fixtures)
+			await (await SharedScratch<GetDiagnosticsTests>.ForAsync(fixture, file)).ResetAsync();
+	}
+
+	public Task DisposeAsync() => Task.CompletedTask;
+
+	private static async Task<(string SolutionPath, InstanceRegistry Registry)> SharedRazorAsync()
+	{
+		SharedScratch<GetDiagnosticsTests> scratch = await SharedScratch<GetDiagnosticsTests>.ForAsync("RazorSolution", "RazorSolution.slnx");
+		return (scratch.SolutionPath, scratch.SharedRegistry);
+	}
+
+	private static async Task<(string SolutionPath, InstanceRegistry Registry)> SharedMultiTargetAsync()
+	{
+		SharedScratch<GetDiagnosticsTests> scratch = await SharedScratch<GetDiagnosticsTests>.ForAsync("MultiTargetSolution", Path.Combine("src", "MultiTarget.slnx"));
+		return (scratch.SolutionPath, scratch.SharedRegistry);
+	}
+
 	[Fact]
 	public async Task WhenASolutionHasACompileError_ThenItIsReturnedAsAnError()
 	{
-		using var registry = new InstanceRegistry();
-		await registry.GetOrAddAsync(TestSolutions.Broken);
+		var registry = await TestSolutions.SharedAsync(TestSolutions.Broken);
 		var subject = new GetDiagnosticsTool(registry, new DiagnosticsService());
 
 		string result = await subject.GetDiagnostics(TestSolutions.Broken, includeErrors: true);
@@ -25,8 +52,7 @@ public class GetDiagnosticsTests
 	[Fact]
 	public async Task WhenSeveritiesAreNotWidened_ThenOnlyErrorsAreReturnedButTheCountsStillSeeWarnings()
 	{
-		using var registry = new InstanceRegistry();
-		await registry.GetOrAddAsync(TestSolutions.Broken);
+		var registry = await TestSolutions.SharedAsync(TestSolutions.Broken);
 		var subject = new GetDiagnosticsTool(registry, new DiagnosticsService());
 
 		string result = await subject.GetDiagnostics(TestSolutions.Broken, includeErrors: true);
@@ -39,8 +65,7 @@ public class GetDiagnosticsTests
 	[Fact]
 	public async Task WhenWarningsAreIncluded_ThenTheyAppearAlongsideErrors()
 	{
-		using var registry = new InstanceRegistry();
-		await registry.GetOrAddAsync(TestSolutions.Broken);
+		var registry = await TestSolutions.SharedAsync(TestSolutions.Broken);
 		var subject = new GetDiagnosticsTool(registry, new DiagnosticsService());
 
 		string result = await subject.GetDiagnostics(
@@ -54,11 +79,10 @@ public class GetDiagnosticsTests
 	[Fact]
 	public async Task WhenARazorFileHasARazorSyntaxError_ThenTheRazorDiagnosticIsReportedAgainstThatFile()
 	{
-		string solutionPath = TestSolutions.CreateScratchRazorSolution();
+		(string solutionPath, InstanceRegistry registry) = await SharedRazorAsync();
 		string broken = Path.Combine(Path.GetDirectoryName(solutionPath)!, "RazorLib", "Broken.razor");
 		await File.WriteAllTextAsync(broken, "<h1>Broken</h1>\n@code {\n    private string Value = \"\";\n");
-		using var registry = new InstanceRegistry();
-		await registry.GetOrAddAsync(solutionPath);
+		await new SolutionFileSync(await registry.GetOrAddAsync(solutionPath)).OnFileChangedAsync(broken);
 		var subject = new GetDiagnosticsTool(registry, new DiagnosticsService());
 
 		string result = await subject.GetDiagnostics(solutionPath, includeErrors: true, includeAnalyzers: false);
@@ -87,9 +111,7 @@ public class GetDiagnosticsTests
 	[Fact]
 	public async Task WhenFilteredByFile_ThenOnlyThatFilesDiagnosticsAreReturned()
 	{
-		string solutionPath = await CreateScratchWithBrokenFilesAsync(conversionErrors: 1);
-		using var registry = new InstanceRegistry();
-		await registry.GetOrAddAsync(solutionPath);
+		(string solutionPath, InstanceRegistry registry) = await CreateScratchWithBrokenFilesAsync(conversionErrors: 1);
 		var subject = new GetDiagnosticsTool(registry, new DiagnosticsService());
 
 		string unfiltered = await subject.GetDiagnostics(solutionPath, includeErrors: true, includeAnalyzers: false);
@@ -109,10 +131,8 @@ public class GetDiagnosticsTests
 	[Fact]
 	public async Task WhenFilteredByFileWithAbsolutePath_ThenRelativeAndAbsoluteMatch()
 	{
-		string solutionPath = await CreateScratchWithBrokenFilesAsync(conversionErrors: 1);
+		(string solutionPath, InstanceRegistry registry) = await CreateScratchWithBrokenFilesAsync(conversionErrors: 1);
 		string absolutePath = Path.Combine(Path.GetDirectoryName(solutionPath)!, "SimpleLibrary", "Broken.cs");
-		using var registry = new InstanceRegistry();
-		await registry.GetOrAddAsync(solutionPath);
 		var subject = new GetDiagnosticsTool(registry, new DiagnosticsService());
 
 		string relative = await subject.GetDiagnostics(
@@ -129,8 +149,7 @@ public class GetDiagnosticsTests
 	[Fact]
 	public async Task WhenFilteredByIds_ThenOnlyThoseIdsAreReturned()
 	{
-		using var registry = new InstanceRegistry();
-		await registry.GetOrAddAsync(TestSolutions.Broken);
+		var registry = await TestSolutions.SharedAsync(TestSolutions.Broken);
 		var subject = new GetDiagnosticsTool(registry, new DiagnosticsService());
 
 		string result = await subject.GetDiagnostics(
@@ -146,8 +165,7 @@ public class GetDiagnosticsTests
 	[Fact]
 	public async Task WhenIdsDifferInCase_ThenTheyStillMatch()
 	{
-		using var registry = new InstanceRegistry();
-		await registry.GetOrAddAsync(TestSolutions.Broken);
+		var registry = await TestSolutions.SharedAsync(TestSolutions.Broken);
 		var subject = new GetDiagnosticsTool(registry, new DiagnosticsService());
 
 		string result = await subject.GetDiagnostics(
@@ -162,8 +180,7 @@ public class GetDiagnosticsTests
 	[Fact]
 	public async Task WhenMaxSizeIsExceeded_ThenTheFirstEntriesAreKeptAndCountsStayComplete()
 	{
-		using var registry = new InstanceRegistry();
-		await registry.GetOrAddAsync(TestSolutions.Broken);
+		var registry = await TestSolutions.SharedAsync(TestSolutions.Broken);
 		var subject = new GetDiagnosticsTool(registry, new DiagnosticsService());
 
 		string result = await subject.GetDiagnostics(
@@ -181,9 +198,7 @@ public class GetDiagnosticsTests
 	[Fact]
 	public async Task WhenSummaryOnly_ThenDiagnosticsAreGroupedById()
 	{
-		string solutionPath = await CreateScratchWithBrokenFilesAsync(conversionErrors: 2);
-		using var registry = new InstanceRegistry();
-		await registry.GetOrAddAsync(solutionPath);
+		(string solutionPath, InstanceRegistry registry) = await CreateScratchWithBrokenFilesAsync(conversionErrors: 2);
 		var subject = new GetDiagnosticsTool(registry, new DiagnosticsService());
 
 		string result = await subject.GetDiagnostics(solutionPath, includeAnalyzers: false, summaryOnly: true);
@@ -202,9 +217,7 @@ public class GetDiagnosticsTests
 	{
 		// The scratch copy keeps both target frameworks: under Source/, Directory.Build.props forces the
 		// committed fixture to a single net10.0 target framework.
-		string solutionPath = TestSolutions.CreateScratchMultiTargetSolution();
-		using var registry = new InstanceRegistry();
-		await registry.GetOrAddAsync(solutionPath);
+		(string solutionPath, InstanceRegistry registry) = await SharedMultiTargetAsync();
 		var subject = new GetDiagnosticsTool(registry, new DiagnosticsService());
 
 		string result = await subject.GetDiagnostics(
@@ -223,9 +236,7 @@ public class GetDiagnosticsTests
 	[Fact]
 	public async Task WhenProjectNameCarriesTheExtensionOrCase_ThenItStillMatches()
 	{
-		string solutionPath = TestSolutions.CreateScratchMultiTargetSolution();
-		using var registry = new InstanceRegistry();
-		await registry.GetOrAddAsync(solutionPath);
+		(string solutionPath, InstanceRegistry registry) = await SharedMultiTargetAsync();
 		var subject = new GetDiagnosticsTool(registry, new DiagnosticsService());
 
 		string withExtension = await subject.GetDiagnostics(
@@ -243,9 +254,7 @@ public class GetDiagnosticsTests
 	[Fact]
 	public async Task WhenProjectNameMatchesNothing_ThenNotFoundOffersCandidates()
 	{
-		string solutionPath = TestSolutions.CreateScratchMultiTargetSolution();
-		using var registry = new InstanceRegistry();
-		await registry.GetOrAddAsync(solutionPath);
+		(string solutionPath, InstanceRegistry registry) = await SharedMultiTargetAsync();
 		var subject = new GetDiagnosticsTool(registry, new DiagnosticsService());
 
 		string result = await subject.GetDiagnostics(
@@ -263,8 +272,7 @@ public class GetDiagnosticsTests
 	[Fact]
 	public async Task WhenFilePathMatchesNoDocument_ThenNotFoundOffersCandidates()
 	{
-		using var registry = new InstanceRegistry();
-		await registry.GetOrAddAsync(TestSolutions.Broken);
+		var registry = await TestSolutions.SharedAsync(TestSolutions.Broken);
 		var subject = new GetDiagnosticsTool(registry, new DiagnosticsService());
 
 		string result = await subject.GetDiagnostics(
@@ -276,9 +284,7 @@ public class GetDiagnosticsTests
 	[Fact]
 	public async Task WhenACompiledFileHasNoMatchingDiagnostics_ThenTheCountsAreZeroAndNotAnError()
 	{
-		string solutionPath = await CreateScratchWithBrokenFilesAsync(conversionErrors: 1);
-		using var registry = new InstanceRegistry();
-		await registry.GetOrAddAsync(solutionPath);
+		(string solutionPath, InstanceRegistry registry) = await CreateScratchWithBrokenFilesAsync(conversionErrors: 1);
 		var subject = new GetDiagnosticsTool(registry, new DiagnosticsService());
 
 		string result = await subject.GetDiagnostics(
@@ -293,8 +299,7 @@ public class GetDiagnosticsTests
 	[Fact]
 	public async Task WhenMaxSizeIsNegative_ThenTheResultIsHeadersOnly()
 	{
-		using var registry = new InstanceRegistry();
-		await registry.GetOrAddAsync(TestSolutions.Broken);
+		var registry = await TestSolutions.SharedAsync(TestSolutions.Broken);
 		var subject = new GetDiagnosticsTool(registry, new DiagnosticsService());
 
 		string result = await subject.GetDiagnostics(
@@ -310,9 +315,7 @@ public class GetDiagnosticsTests
 	[Fact]
 	public async Task WhenFiltersCombine_ThenEveryActiveFilterIsEchoedAndCountsAgree()
 	{
-		string solutionPath = await CreateScratchWithBrokenFilesAsync(conversionErrors: 1);
-		using var registry = new InstanceRegistry();
-		await registry.GetOrAddAsync(solutionPath);
+		(string solutionPath, InstanceRegistry registry) = await CreateScratchWithBrokenFilesAsync(conversionErrors: 1);
 		var subject = new GetDiagnosticsTool(registry, new DiagnosticsService());
 
 		string result = await subject.GetDiagnostics(
@@ -334,14 +337,17 @@ public class GetDiagnosticsTests
 	[Fact]
 	public async Task WhenFilteredByARazorFile_ThenRazorAndMappedDiagnosticsAreReturned()
 	{
-		string solutionPath = TestSolutions.CreateScratchRazorSolution();
+		(string solutionPath, InstanceRegistry registry) = await SharedRazorAsync();
 		string razorLib = Path.Combine(Path.GetDirectoryName(solutionPath)!, "RazorLib");
 		await File.WriteAllTextAsync(
 			Path.Combine(razorLib, "Broken.razor"), "<h1>Broken</h1>\n@code {\n    private string Value = \"\";\n");
 		await File.WriteAllTextAsync(
 			Path.Combine(razorLib, "Mapped.razor"), "<p>Mapped</p>\n@code {\n    public int Bad() => \"no\";\n}\n");
-		using var registry = new InstanceRegistry();
-		await registry.GetOrAddAsync(solutionPath);
+		await new SolutionFileSync(await registry.GetOrAddAsync(solutionPath)).OnFilesChangedAsync(
+		[
+			Path.Combine(razorLib, "Broken.razor"),
+			Path.Combine(razorLib, "Mapped.razor"),
+		]);
 		var subject = new GetDiagnosticsTool(registry, new DiagnosticsService());
 
 		string broken = await subject.GetDiagnostics(
@@ -362,8 +368,7 @@ public class GetDiagnosticsTests
 	[Fact]
 	public async Task WhenNoFiltersAreSupplied_ThenTheOutputIsUnchanged()
 	{
-		using var registry = new InstanceRegistry();
-		await registry.GetOrAddAsync(TestSolutions.Broken);
+		var registry = await TestSolutions.SharedAsync(TestSolutions.Broken);
 		var subject = new GetDiagnosticsTool(registry, new DiagnosticsService());
 
 		string result = await subject.GetDiagnostics(TestSolutions.Broken, includeErrors: true, includeAnalyzers: false);
@@ -377,7 +382,8 @@ public class GetDiagnosticsTests
 	[Fact]
 	public async Task WhenMaxSizeIsExceeded_ThenTheKeptLeavesAreTheFirstInBodyOrder()
 	{
-		string solutionPath = TestSolutions.CreateScratchSimpleSolution();
+		SharedScratch<GetDiagnosticsTests> scratch = await SharedScratch<GetDiagnosticsTests>.ForAsync("SimpleSolution", "SimpleSolution.slnx");
+		string solutionPath = scratch.SolutionPath;
 		string projectDirectory = Path.Combine(Path.GetDirectoryName(solutionPath)!, "SimpleLibrary");
 		Directory.CreateDirectory(Path.Combine(projectDirectory, "Sub"));
 		await File.WriteAllTextAsync(
@@ -386,8 +392,12 @@ public class GetDiagnosticsTests
 		await File.WriteAllTextAsync(
 			Path.Combine(projectDirectory, "Sub", "Zzz.cs"),
 			"namespace SimpleLibrary;\n\npublic class Zzz\n{\n\tpublic int Value() => \"text\";\n}\n");
-		using var registry = new InstanceRegistry();
-		await registry.GetOrAddAsync(solutionPath);
+		InstanceRegistry registry = scratch.SharedRegistry;
+		await new SolutionFileSync(await registry.GetOrAddAsync(solutionPath)).OnFilesChangedAsync(
+		[
+			Path.Combine(projectDirectory, "Aaa.cs"),
+			Path.Combine(projectDirectory, "Sub", "Zzz.cs"),
+		]);
 		var subject = new GetDiagnosticsTool(registry, new DiagnosticsService());
 
 		string full = await subject.GetDiagnostics(solutionPath, includeErrors: true, includeAnalyzers: false);
@@ -406,8 +416,7 @@ public class GetDiagnosticsTests
 	[Fact]
 	public async Task WhenSummaryOnlyIsRequestedWithoutSeverityFlags_ThenNonHiddenIdsAreListedAndCountsStayComplete()
 	{
-		using var registry = new InstanceRegistry();
-		await registry.GetOrAddAsync(TestSolutions.Broken);
+		var registry = await TestSolutions.SharedAsync(TestSolutions.Broken);
 		var subject = new GetDiagnosticsTool(registry, new DiagnosticsService());
 
 		string result = await subject.GetDiagnostics(TestSolutions.Broken, includeAnalyzers: false, summaryOnly: true);
@@ -425,9 +434,7 @@ public class GetDiagnosticsTests
 	[Fact]
 	public async Task WhenSummaryOnlyIsCapped_ThenCountCountsIdRows()
 	{
-		string solutionPath = await CreateScratchWithBrokenFilesAsync(conversionErrors: 2);
-		using var registry = new InstanceRegistry();
-		await registry.GetOrAddAsync(solutionPath);
+		(string solutionPath, InstanceRegistry registry) = await CreateScratchWithBrokenFilesAsync(conversionErrors: 2);
 		var subject = new GetDiagnosticsTool(registry, new DiagnosticsService());
 
 		string result = await subject.GetDiagnostics(
@@ -446,9 +453,7 @@ public class GetDiagnosticsTests
 	[Fact]
 	public async Task WhenSummaryOnlyIsRequestedWithoutSeverityFlags_ThenHiddenIdsAreOmitted()
 	{
-		string solutionPath = await CreateScratchWithEverySeverityAsync();
-		using var registry = new InstanceRegistry();
-		await registry.GetOrAddAsync(solutionPath);
+		(string solutionPath, InstanceRegistry registry) = await CreateScratchWithEverySeverityAsync();
 		var subject = new GetDiagnosticsTool(registry, new DiagnosticsService());
 
 		string result = await subject.GetDiagnostics(solutionPath, summaryOnly: true);
@@ -472,9 +477,7 @@ public class GetDiagnosticsTests
 	[Fact]
 	public async Task WhenSummaryOnlyIncludesHidden_ThenHiddenIdsAreListedAndTheHeaderCountIsUnchanged()
 	{
-		string solutionPath = await CreateScratchWithEverySeverityAsync();
-		using var registry = new InstanceRegistry();
-		await registry.GetOrAddAsync(solutionPath);
+		(string solutionPath, InstanceRegistry registry) = await CreateScratchWithEverySeverityAsync();
 		var subject = new GetDiagnosticsTool(registry, new DiagnosticsService());
 
 		string withoutHidden = await subject.GetDiagnostics(solutionPath, summaryOnly: true);
@@ -490,8 +493,7 @@ public class GetDiagnosticsTests
 	[Fact]
 	public async Task WhenFilteredByAPrivateFixTriggerId_ThenNothingMatches()
 	{
-		using var registry = new InstanceRegistry();
-		await registry.GetOrAddAsync(TestSolutions.Broken);
+		var registry = await TestSolutions.SharedAsync(TestSolutions.Broken);
 		var subject = new GetDiagnosticsTool(registry, new DiagnosticsService());
 
 		string result = await subject.GetDiagnostics(
@@ -510,8 +512,7 @@ public class GetDiagnosticsTests
 	[Fact]
 	public async Task WhenCountOnlyIsRequested_ThenTheHeadersAndCountAreReturnedWithoutRows()
 	{
-		using var registry = new InstanceRegistry();
-		await registry.GetOrAddAsync(TestSolutions.Broken);
+		var registry = await TestSolutions.SharedAsync(TestSolutions.Broken);
 		var subject = new GetDiagnosticsTool(registry, new DiagnosticsService());
 
 		string result = await subject.GetDiagnostics(
@@ -530,8 +531,7 @@ public class GetDiagnosticsTests
 	[Fact]
 	public async Task WhenCountOnlyIsCapped_ThenTruncatedIsKeptAndCountAppearsOnce()
 	{
-		using var registry = new InstanceRegistry();
-		await registry.GetOrAddAsync(TestSolutions.Broken);
+		var registry = await TestSolutions.SharedAsync(TestSolutions.Broken);
 		var subject = new GetDiagnosticsTool(registry, new DiagnosticsService());
 
 		string result = await subject.GetDiagnostics(
@@ -570,12 +570,14 @@ public class GetDiagnosticsTests
 	/// scratch copy lives outside Source/, so it does not inherit TreatWarningsAsErrors and CS0169 stays a
 	/// warning.
 	/// </summary>
-	private static async Task<string> CreateScratchWithEverySeverityAsync()
+	private static async Task<(string SolutionPath, InstanceRegistry Registry)> CreateScratchWithEverySeverityAsync()
 	{
-		string solutionPath = TestSolutions.CreateScratchSimpleSolution();
+		SharedScratch<GetDiagnosticsTests> scratch = await SharedScratch<GetDiagnosticsTests>.ForAsync("SimpleSolution", "SimpleSolution.slnx");
+		string solutionPath = scratch.SolutionPath;
 		string projectDirectory = Path.Combine(Path.GetDirectoryName(solutionPath)!, "SimpleLibrary");
+		string brokenPath = Path.Combine(projectDirectory, "Broken.cs");
 		await File.WriteAllTextAsync(
-			Path.Combine(projectDirectory, "Broken.cs"),
+			brokenPath,
 			"namespace SimpleLibrary;\n"
 			+ "\n"
 			+ "public class Broken\n"
@@ -584,16 +586,19 @@ public class GetDiagnosticsTests
 			+ "\n"
 			+ "	public int GetValue() => \"not an int\";\n"
 			+ "}\n");
-		return solutionPath;
+
+		await new SolutionFileSync(await scratch.SharedRegistry.GetOrAddAsync(solutionPath)).OnFileChangedAsync(brokenPath);
+		return (solutionPath, scratch.SharedRegistry);
 	}
 
 	/// <summary>
 	/// A scratch SimpleSolution whose project carries <paramref name="conversionErrors"/> CS0029s in
 	/// Broken.cs and one CS0103 in AlsoBroken.cs, so file/id/count tests have two files to filter between.
 	/// </summary>
-	private static async Task<string> CreateScratchWithBrokenFilesAsync(int conversionErrors)
+	private static async Task<(string SolutionPath, InstanceRegistry Registry)> CreateScratchWithBrokenFilesAsync(int conversionErrors)
 	{
-		string solutionPath = TestSolutions.CreateScratchSimpleSolution();
+		SharedScratch<GetDiagnosticsTests> scratch = await SharedScratch<GetDiagnosticsTests>.ForAsync("SimpleSolution", "SimpleSolution.slnx");
+		string solutionPath = scratch.SolutionPath;
 		string projectDirectory = Path.Combine(Path.GetDirectoryName(solutionPath)!, "SimpleLibrary");
 
 		string methods = string.Join("\n", Enumerable.Range(0, conversionErrors)
@@ -613,8 +618,12 @@ public class GetDiagnosticsTests
 			+ "\tpublic int Sum() => Missing + 1;\n"
 			+ "}\n";
 
-		await File.WriteAllTextAsync(Path.Combine(projectDirectory, "Broken.cs"), broken);
-		await File.WriteAllTextAsync(Path.Combine(projectDirectory, "AlsoBroken.cs"), alsoBroken);
-		return solutionPath;
+		string brokenPath = Path.Combine(projectDirectory, "Broken.cs");
+		string alsoBrokenPath = Path.Combine(projectDirectory, "AlsoBroken.cs");
+		await File.WriteAllTextAsync(brokenPath, broken);
+		await File.WriteAllTextAsync(alsoBrokenPath, alsoBroken);
+		RoslynInstance instance = await scratch.SharedRegistry.GetOrAddAsync(solutionPath);
+		await new SolutionFileSync(instance).OnFilesChangedAsync([brokenPath, alsoBrokenPath]);
+		return (solutionPath, scratch.SharedRegistry);
 	}
 }

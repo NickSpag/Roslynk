@@ -1,4 +1,4 @@
-using Microsoft.Extensions.DependencyInjection;
+﻿using Microsoft.Extensions.DependencyInjection;
 using Morris.Roslynk.Features.MultiQuery;
 using Morris.Roslynk.Infrastructure.Lifecycle;
 using Morris.Roslynk.Infrastructure.Projections;
@@ -15,8 +15,7 @@ public class GeneratedDeclarationBatchTests
 	[Fact]
 	public async Task WhenBatched_ThenAnUnmentionedGeneratedMemberResolves()
 	{
-		using var registry = new InstanceRegistry();
-		await registry.GetOrAddAsync(TestSolutions.Generator);
+		var registry = await TestSolutions.SharedAsync(TestSolutions.Generator);
 		RoslynInstance instance = await registry.GetOrBeginAsync(TestSolutions.Generator);
 		SolutionModel model = await instance.ReadModelAsync();
 

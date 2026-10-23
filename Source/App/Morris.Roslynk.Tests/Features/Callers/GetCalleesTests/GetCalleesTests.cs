@@ -1,4 +1,4 @@
-using Morris.Roslynk.Features.Callers.GetCallees;
+﻿using Morris.Roslynk.Features.Callers.GetCallees;
 using Morris.Roslynk.Infrastructure.Lifecycle;
 using Morris.Roslynk.Infrastructure.Projections;
 using Morris.Roslynk.Infrastructure.Resolution;
@@ -10,8 +10,7 @@ public class GetCalleesTests
 	[Fact]
 	public async Task WhenAMethodCallsOtherMembers_ThenTheCalleesAreReturned()
 	{
-		using var registry = new InstanceRegistry();
-		await registry.GetOrAddAsync(TestSolutions.Simple);
+		var registry = await TestSolutions.SharedAsync(TestSolutions.Simple);
 		var subject = new GetCalleesTool(registry, new SymbolResolver(), new ProjectionService());
 
 		string result = await subject.GetCallees(TestSolutions.Simple, "SimpleLibrary.Caller.Run");
@@ -26,8 +25,7 @@ public class GetCalleesTests
 	[Fact]
 	public async Task WhenAMethodCallsAnOverload_ThenOnlyThatOverloadIsReported()
 	{
-		using var registry = new InstanceRegistry();
-		await registry.GetOrAddAsync(TestSolutions.Simple);
+		var registry = await TestSolutions.SharedAsync(TestSolutions.Simple);
 		var subject = new GetCalleesTool(registry, new SymbolResolver(), new ProjectionService());
 
 		string result = await subject.GetCallees(TestSolutions.Simple, "SimpleLibrary.Ledger.Add(int, int)");
@@ -44,8 +42,7 @@ public class GetCalleesTests
 	[Fact]
 	public async Task WhenAPropertyIsRead_ThenItsGetterIsTheCallee()
 	{
-		using var registry = new InstanceRegistry();
-		await registry.GetOrAddAsync(TestSolutions.Simple);
+		var registry = await TestSolutions.SharedAsync(TestSolutions.Simple);
 		var subject = new GetCalleesTool(registry, new SymbolResolver(), new ProjectionService());
 
 		string result = await subject.GetCallees(TestSolutions.Simple, "SimpleLibrary.Ledger.Add(int)");
@@ -60,8 +57,7 @@ public class GetCalleesTests
 	[Fact]
 	public async Task WhenTheMemberHasNoBody_ThenNoCalleesAreReported()
 	{
-		using var registry = new InstanceRegistry();
-		await registry.GetOrAddAsync(TestSolutions.Simple);
+		var registry = await TestSolutions.SharedAsync(TestSolutions.Simple);
 		var subject = new GetCalleesTool(registry, new SymbolResolver(), new ProjectionService());
 
 		string result = await subject.GetCallees(TestSolutions.Simple, "SimpleLibrary.IGreeter.Greet");
@@ -76,8 +72,7 @@ public class GetCalleesTests
 	[Fact]
 	public async Task WhenTheMemberIsNotFound_ThenNotFoundIsReturned()
 	{
-		using var registry = new InstanceRegistry();
-		await registry.GetOrAddAsync(TestSolutions.Simple);
+		var registry = await TestSolutions.SharedAsync(TestSolutions.Simple);
 		var subject = new GetCalleesTool(registry, new SymbolResolver(), new ProjectionService());
 
 		string result = await subject.GetCallees(TestSolutions.Simple, "SimpleLibrary.DoesNotExist");
@@ -88,8 +83,7 @@ public class GetCalleesTests
 	[Fact]
 	public async Task WhenTheNameMatchesSeveralOverloads_ThenAmbiguousCandidatesAreDistinguishable()
 	{
-		using var registry = new InstanceRegistry();
-		await registry.GetOrAddAsync(TestSolutions.Simple);
+		var registry = await TestSolutions.SharedAsync(TestSolutions.Simple);
 		var subject = new GetCalleesTool(registry, new SymbolResolver(), new ProjectionService());
 
 		string result = await subject.GetCallees(TestSolutions.Simple, "SimpleLibrary.Ledger.Add");
@@ -116,8 +110,7 @@ public class GetCalleesTests
 	[Fact]
 	public async Task WhenCallsComeFromBothBranchesOfAConditional_ThenBothCalleesAreReported()
 	{
-		using var registry = new InstanceRegistry();
-		await registry.GetOrAddAsync(TestSolutions.Conditional);
+		var registry = await TestSolutions.SharedAsync(TestSolutions.Conditional);
 		var subject = new GetCalleesTool(registry, new SymbolResolver(), new ProjectionService());
 
 		string result = await subject.GetCallees(TestSolutions.Conditional, "ConditionalLib.Caller2.DebugCall");
@@ -132,8 +125,7 @@ public class GetCalleesTests
 	[Fact]
 	public async Task WhenALocalFunctionIsQueried_ThenItsOwnCallsAreReported()
 	{
-		using var registry = new InstanceRegistry();
-		await registry.GetOrAddAsync(TestSolutions.LocalFunctions);
+		var registry = await TestSolutions.SharedAsync(TestSolutions.LocalFunctions);
 		var subject = new GetCalleesTool(registry, new SymbolResolver(), new ProjectionService());
 
 		string result = await subject.GetCallees(TestSolutions.LocalFunctions, "LocalFunctionLib.ParentClass.Widget.Method1.localMethod");
@@ -146,8 +138,7 @@ public class GetCalleesTests
 	[Fact]
 	public async Task WhenAMethodCallsAMemberThroughALambda_ThenTheLambdaTargetsCallIsReported()
 	{
-		using var registry = new InstanceRegistry();
-		await registry.GetOrAddAsync(TestSolutions.Simple);
+		var registry = await TestSolutions.SharedAsync(TestSolutions.Simple);
 		var subject = new GetCalleesTool(registry, new SymbolResolver(), new ProjectionService());
 
 		string result = await subject.GetCallees(TestSolutions.Simple, "SimpleLibrary.OverloadCaller.RunAll");

@@ -262,8 +262,7 @@ public class GetMembersTests
 		bool includeNestedTypes = true,
 		bool countOnly = false)
 	{
-		using var registry = new InstanceRegistry();
-		await registry.GetOrAddAsync(TestSolutions.Simple);
+		var registry = await TestSolutions.SharedAsync(TestSolutions.Simple);
 		var subject = new GetMembersTool(registry, new SymbolResolver(), new ProjectionService());
 
 		return await subject.GetMembers(

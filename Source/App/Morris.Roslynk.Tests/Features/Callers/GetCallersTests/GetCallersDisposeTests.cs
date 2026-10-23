@@ -1,4 +1,4 @@
-using Morris.Roslynk.Features.Callers.GetCallers;
+﻿using Morris.Roslynk.Features.Callers.GetCallers;
 using Morris.Roslynk.Infrastructure.Lifecycle;
 using Morris.Roslynk.Infrastructure.Projections;
 using Morris.Roslynk.Infrastructure.Resolution;
@@ -60,8 +60,7 @@ public class GetCallersDisposeTests
 
 	private static async Task<string> CallersAsync(string symbolName)
 	{
-		using var registry = new InstanceRegistry();
-		await registry.GetOrAddAsync(TestSolutions.Dispose);
+		var registry = await TestSolutions.SharedAsync(TestSolutions.Dispose);
 		var subject = new GetCallersTool(registry, new SymbolResolver(), new ProjectionService());
 
 		return await subject.GetCallers(TestSolutions.Dispose, symbolName);

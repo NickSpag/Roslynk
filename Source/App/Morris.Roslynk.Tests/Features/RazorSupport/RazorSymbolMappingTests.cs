@@ -1,4 +1,4 @@
-using Morris.Roslynk.Features.Symbols.GetMembers;
+﻿using Morris.Roslynk.Features.Symbols.GetMembers;
 using Morris.Roslynk.Features.Symbols.GetSymbolBody;
 using Morris.Roslynk.Infrastructure.Lifecycle;
 using Morris.Roslynk.Infrastructure.Projections;
@@ -69,8 +69,7 @@ public class RazorSymbolMappingTests
 	[Fact]
 	public async Task WhenGettingTheBodyOfAGeneratedNonRazorDeclaration_ThenItIsStillMarkedGenerated()
 	{
-		using var registry = new InstanceRegistry();
-		await registry.GetOrAddAsync(TestSolutions.Generator);
+		var registry = await TestSolutions.SharedAsync(TestSolutions.Generator);
 		var subject = new GetSymbolBodyTool(registry, new SymbolResolver(), new ProjectionService());
 
 		string result = await subject.GetSymbolBody(TestSolutions.Generator, "ConsumerLib.Ctx.ReadValue2");
@@ -82,8 +81,7 @@ public class RazorSymbolMappingTests
 
 	private static async Task<string> BodyAsync(string symbolName)
 	{
-		using var registry = new InstanceRegistry();
-		await registry.GetOrAddAsync(TestSolutions.RazorInject);
+		var registry = await TestSolutions.SharedAsync(TestSolutions.RazorInject);
 		var subject = new GetSymbolBodyTool(registry, new SymbolResolver(), new ProjectionService());
 
 		return await subject.GetSymbolBody(TestSolutions.RazorInject, symbolName);
@@ -91,8 +89,7 @@ public class RazorSymbolMappingTests
 
 	private static async Task<string> MembersAsync(string symbolName)
 	{
-		using var registry = new InstanceRegistry();
-		await registry.GetOrAddAsync(TestSolutions.RazorInject);
+		var registry = await TestSolutions.SharedAsync(TestSolutions.RazorInject);
 		var subject = new GetMembersTool(registry, new SymbolResolver(), new ProjectionService());
 
 		return await subject.GetMembers(TestSolutions.RazorInject, symbolName);

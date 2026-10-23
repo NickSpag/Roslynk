@@ -1,4 +1,4 @@
-using Microsoft.CodeAnalysis;
+﻿using Microsoft.CodeAnalysis;
 using Morris.Roslynk.Features.Callers.GetCallees;
 using Morris.Roslynk.Features.References.FindReferences;
 using Morris.Roslynk.Features.Signatures.RenameParameter;
@@ -103,8 +103,7 @@ public class MultiTargetBindingTests
 	[Fact]
 	public async Task WhenEveryTargetFrameworkBindsTheParameterTypes_ThenEchoedNameIsUnchanged()
 	{
-		using var registry = new InstanceRegistry();
-		await registry.GetOrAddAsync(TestSolutions.MultiTarget);
+		var registry = await TestSolutions.SharedAsync(TestSolutions.MultiTarget);
 		var subject = new FindReferencesTool(registry, new SymbolResolver(), new ProjectionService());
 
 		// Both copies of Echo bind, so discovery order still decides and the echo is byte-for-byte stable.

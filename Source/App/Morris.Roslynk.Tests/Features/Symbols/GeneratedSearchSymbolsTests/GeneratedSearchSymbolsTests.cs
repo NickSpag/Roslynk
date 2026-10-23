@@ -1,4 +1,4 @@
-using System.Text.RegularExpressions;
+﻿using System.Text.RegularExpressions;
 using Morris.Roslynk.Features.Symbols.SearchSymbols;
 using Morris.Roslynk.Infrastructure.Lifecycle;
 using Morris.Roslynk.Infrastructure.Projections;
@@ -92,8 +92,7 @@ public class GeneratedSearchSymbolsTests
 	[Fact]
 	public async Task WhenMaxSizeCannotCarryEveryMatch_ThenThePageIsTruncatedAndNothingIsCapped()
 	{
-		using var registry = new InstanceRegistry();
-		await registry.GetOrAddAsync(TestSolutions.Generator);
+		var registry = await TestSolutions.SharedAsync(TestSolutions.Generator);
 		var subject = new SearchSymbolsTool(registry, new ProjectionService());
 
 		// Shape matches the partial type and the ShapeSourceGenerator class, so a one-item page truncates.
@@ -109,8 +108,7 @@ public class GeneratedSearchSymbolsTests
 
 	private static async Task<string> SearchAsync(string query)
 	{
-		using var registry = new InstanceRegistry();
-		await registry.GetOrAddAsync(TestSolutions.Generator);
+		var registry = await TestSolutions.SharedAsync(TestSolutions.Generator);
 		return await new SearchSymbolsTool(registry, new ProjectionService()).SearchSymbols(TestSolutions.Generator, query);
 	}
 }

@@ -10,8 +10,7 @@ public class GetTypeHierarchyTests
 	[Fact]
 	public async Task WhenATypeImplementsAnInterface_ThenTheInterfaceIsInTheHierarchy()
 	{
-		using var registry = new InstanceRegistry();
-		await registry.GetOrAddAsync(TestSolutions.Simple);
+		var registry = await TestSolutions.SharedAsync(TestSolutions.Simple);
 		var subject = new GetTypeHierarchyTool(registry, new SymbolResolver(), new ProjectionService());
 
 		string result = await subject.GetTypeHierarchy(TestSolutions.Simple, "SimpleLibrary.Greeter");
@@ -24,8 +23,7 @@ public class GetTypeHierarchyTests
 	[Fact]
 	public async Task WhenASectionIsEmpty_ThenItIsOmitted()
 	{
-		using var registry = new InstanceRegistry();
-		await registry.GetOrAddAsync(TestSolutions.Simple);
+		var registry = await TestSolutions.SharedAsync(TestSolutions.Simple);
 		var subject = new GetTypeHierarchyTool(registry, new SymbolResolver(), new ProjectionService());
 
 		string result = await subject.GetTypeHierarchy(TestSolutions.Simple, "SimpleLibrary.Greeter");
@@ -37,8 +35,7 @@ public class GetTypeHierarchyTests
 	[Fact]
 	public async Task WhenTheTypeIsNotFound_ThenNotFoundIsReturned()
 	{
-		using var registry = new InstanceRegistry();
-		await registry.GetOrAddAsync(TestSolutions.Simple);
+		var registry = await TestSolutions.SharedAsync(TestSolutions.Simple);
 		var subject = new GetTypeHierarchyTool(registry, new SymbolResolver(), new ProjectionService());
 
 		string result = await subject.GetTypeHierarchy(TestSolutions.Simple, "SimpleLibrary.DoesNotExist");

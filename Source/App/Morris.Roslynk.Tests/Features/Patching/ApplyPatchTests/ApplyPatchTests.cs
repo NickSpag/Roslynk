@@ -1,18 +1,36 @@
 ﻿using System.Text;
 using Morris.Roslynk.Features.Patching.ApplyPatch;
 using Morris.Roslynk.Infrastructure.Lifecycle;
+using Morris.Roslynk.Infrastructure.Watching;
 
 namespace Morris.Roslynk.Tests.Features.Patching.ApplyPatchTests;
 
-public class ApplyPatchTests
+public class ApplyPatchTests : IAsyncLifetime
 {
+	private static readonly (string Fixture, string File)[] Fixtures =
+	[
+		("SimpleSolution", "SimpleSolution.slnx"),
+		("MultiTargetSolution", Path.Combine("src", "MultiTarget.slnx")),
+		("RazorSolution", "RazorSolution.slnx"),
+		("RazorMultiProjectSolution", "RazorMultiProjectSolution.slnx"),
+	];
+
+	public async Task InitializeAsync()
+	{
+		foreach ((string fixture, string file) in Fixtures)
+			await (await SharedScratch<ApplyPatchTests>.ForAsync(fixture, file)).ResetAsync();
+	}
+
+	public Task DisposeAsync() => Task.CompletedTask;
+
 	private const string GreeterRelativePath = "SimpleLibrary/Greeter.cs";
 
 	[Fact]
 	public async Task WhenApplyingAValidPatch_ThenTheFileAndSnapshotAreUpdated()
 	{
-		string solutionPath = TestSolutions.CreateScratchSimpleSolution();
-		using var registry = new InstanceRegistry();
+		SharedScratch<ApplyPatchTests> scratch = await SharedScratch<ApplyPatchTests>.ForAsync("SimpleSolution", "SimpleSolution.slnx");
+		string solutionPath = scratch.SolutionPath;
+		InstanceRegistry registry = scratch.SharedRegistry;
 		RoslynInstance instance = await registry.GetOrAddAsync(solutionPath);
 		var subject = new ApplyPatchTool(registry);
 
@@ -30,8 +48,9 @@ public class ApplyPatchTests
 	[Fact]
 	public async Task WhenApplyingWithCheckOnly_ThenNothingIsWritten()
 	{
-		string solutionPath = TestSolutions.CreateScratchSimpleSolution();
-		using var registry = new InstanceRegistry();
+		SharedScratch<ApplyPatchTests> scratch = await SharedScratch<ApplyPatchTests>.ForAsync("SimpleSolution", "SimpleSolution.slnx");
+		string solutionPath = scratch.SolutionPath;
+		InstanceRegistry registry = scratch.SharedRegistry;
 		await registry.GetOrAddAsync(solutionPath);
 		var subject = new ApplyPatchTool(registry);
 
@@ -48,8 +67,9 @@ public class ApplyPatchTests
 	[Fact]
 	public async Task WhenABaseVersionIsStale_ThenItIsRejectedAndNothingIsWritten()
 	{
-		string solutionPath = TestSolutions.CreateScratchSimpleSolution();
-		using var registry = new InstanceRegistry();
+		SharedScratch<ApplyPatchTests> scratch = await SharedScratch<ApplyPatchTests>.ForAsync("SimpleSolution", "SimpleSolution.slnx");
+		string solutionPath = scratch.SolutionPath;
+		InstanceRegistry registry = scratch.SharedRegistry;
 		await registry.GetOrAddAsync(solutionPath);
 		var subject = new ApplyPatchTool(registry);
 
@@ -68,8 +88,9 @@ public class ApplyPatchTests
 	[Fact]
 	public async Task WhenThePatchTargetsAProjectFile_ThenItIsAppliedToDisk()
 	{
-		string solutionPath = TestSolutions.CreateScratchSimpleSolution();
-		using var registry = new InstanceRegistry();
+		SharedScratch<ApplyPatchTests> scratch = await SharedScratch<ApplyPatchTests>.ForAsync("SimpleSolution", "SimpleSolution.slnx");
+		string solutionPath = scratch.SolutionPath;
+		InstanceRegistry registry = scratch.SharedRegistry;
 		await registry.GetOrAddAsync(solutionPath);
 		var subject = new ApplyPatchTool(registry);
 
@@ -86,8 +107,9 @@ public class ApplyPatchTests
 	[Fact]
 	public async Task WhenThePatchTargetsARazorFile_ThenItIsAppliedAndTheSnapshotIsUpdated()
 	{
-		string solutionPath = TestSolutions.CreateScratchRazorSolution();
-		using var registry = new InstanceRegistry();
+		SharedScratch<ApplyPatchTests> scratch = await SharedScratch<ApplyPatchTests>.ForAsync("RazorSolution", "RazorSolution.slnx");
+		string solutionPath = scratch.SolutionPath;
+		InstanceRegistry registry = scratch.SharedRegistry;
 		RoslynInstance instance = await registry.GetOrAddAsync(solutionPath);
 		var subject = new ApplyPatchTool(registry);
 
@@ -105,8 +127,9 @@ public class ApplyPatchTests
 	[Fact]
 	public async Task WhenThePatchTargetsATextFileOutsideTheModel_ThenItIsAppliedToDisk()
 	{
-		string solutionPath = TestSolutions.CreateScratchSimpleSolution();
-		using var registry = new InstanceRegistry();
+		SharedScratch<ApplyPatchTests> scratch = await SharedScratch<ApplyPatchTests>.ForAsync("SimpleSolution", "SimpleSolution.slnx");
+		string solutionPath = scratch.SolutionPath;
+		InstanceRegistry registry = scratch.SharedRegistry;
 		await registry.GetOrAddAsync(solutionPath);
 		var subject = new ApplyPatchTool(registry);
 
@@ -124,8 +147,9 @@ public class ApplyPatchTests
 	[Fact]
 	public async Task WhenThePatchTargetsABinaryFile_ThenItIsNotSupported()
 	{
-		string solutionPath = TestSolutions.CreateScratchSimpleSolution();
-		using var registry = new InstanceRegistry();
+		SharedScratch<ApplyPatchTests> scratch = await SharedScratch<ApplyPatchTests>.ForAsync("SimpleSolution", "SimpleSolution.slnx");
+		string solutionPath = scratch.SolutionPath;
+		InstanceRegistry registry = scratch.SharedRegistry;
 		await registry.GetOrAddAsync(solutionPath);
 		var subject = new ApplyPatchTool(registry);
 
@@ -199,8 +223,9 @@ public class ApplyPatchTests
 	[Fact]
 	public async Task WhenThePatchTargetsAFileUnderObj_ThenItIsNotSupported()
 	{
-		string solutionPath = TestSolutions.CreateScratchSimpleSolution();
-		using var registry = new InstanceRegistry();
+		SharedScratch<ApplyPatchTests> scratch = await SharedScratch<ApplyPatchTests>.ForAsync("SimpleSolution", "SimpleSolution.slnx");
+		string solutionPath = scratch.SolutionPath;
+		InstanceRegistry registry = scratch.SharedRegistry;
 		await registry.GetOrAddAsync(solutionPath);
 		var subject = new ApplyPatchTool(registry);
 
@@ -219,8 +244,9 @@ public class ApplyPatchTests
 	[Fact]
 	public async Task WhenThePatchTargetsAFileOutsideTheSolutionFolder_ThenItIsNotSupported()
 	{
-		string solutionPath = TestSolutions.CreateScratchSimpleSolution();
-		using var registry = new InstanceRegistry();
+		SharedScratch<ApplyPatchTests> scratch = await SharedScratch<ApplyPatchTests>.ForAsync("SimpleSolution", "SimpleSolution.slnx");
+		string solutionPath = scratch.SolutionPath;
+		InstanceRegistry registry = scratch.SharedRegistry;
 		await registry.GetOrAddAsync(solutionPath);
 		var subject = new ApplyPatchTool(registry);
 
@@ -238,8 +264,9 @@ public class ApplyPatchTests
 	[Fact]
 	public async Task WhenThePatchTargetsANonExistentFile_ThenItIsNotFound()
 	{
-		string solutionPath = TestSolutions.CreateScratchSimpleSolution();
-		using var registry = new InstanceRegistry();
+		SharedScratch<ApplyPatchTests> scratch = await SharedScratch<ApplyPatchTests>.ForAsync("SimpleSolution", "SimpleSolution.slnx");
+		string solutionPath = scratch.SolutionPath;
+		InstanceRegistry registry = scratch.SharedRegistry;
 		await registry.GetOrAddAsync(solutionPath);
 		var subject = new ApplyPatchTool(registry);
 
@@ -255,8 +282,9 @@ public class ApplyPatchTests
 	[Fact]
 	public async Task WhenAPathIsRelativeToTheRepoRootAndTheProjectIsMultiTargeted_ThenThePatchResolves()
 	{
-		string solutionPath = TestSolutions.CreateScratchMultiTargetSolution();
-		using var registry = new InstanceRegistry();
+		SharedScratch<ApplyPatchTests> scratch = await SharedScratch<ApplyPatchTests>.ForAsync("MultiTargetSolution", Path.Combine("src", "MultiTarget.slnx"));
+		string solutionPath = scratch.SolutionPath;
+		InstanceRegistry registry = scratch.SharedRegistry;
 		await registry.GetOrAddAsync(solutionPath);
 		var subject = new ApplyPatchTool(registry);
 
@@ -272,8 +300,9 @@ public class ApplyPatchTests
 	[Fact]
 	public async Task WhenAPathIsRelativeToTheRepoRootAndTheProjectIsMultiTargeted_ThenTheFileIsPatchedOnce()
 	{
-		string solutionPath = TestSolutions.CreateScratchMultiTargetSolution();
-		using var registry = new InstanceRegistry();
+		SharedScratch<ApplyPatchTests> scratch = await SharedScratch<ApplyPatchTests>.ForAsync("MultiTargetSolution", Path.Combine("src", "MultiTarget.slnx"));
+		string solutionPath = scratch.SolutionPath;
+		InstanceRegistry registry = scratch.SharedRegistry;
 		await registry.GetOrAddAsync(solutionPath);
 		var subject = new ApplyPatchTool(registry);
 
@@ -289,7 +318,8 @@ public class ApplyPatchTests
 	[Fact]
 	public async Task WhenASuffixMatchesTwoDistinctFiles_ThenTheErrorIsAmbiguousWithCandidates()
 	{
-		string solutionPath = TestSolutions.CreateScratchMultiTargetSolution();
+		SharedScratch<ApplyPatchTests> scratch = await SharedScratch<ApplyPatchTests>.ForAsync("MultiTargetSolution", Path.Combine("src", "MultiTarget.slnx"));
+		string solutionPath = scratch.SolutionPath;
 		string projectDirectory = Path.Combine(Path.GetDirectoryName(solutionPath)!, "Multi");
 		foreach (string folder in new[] { "A", "B" })
 		{
@@ -297,8 +327,14 @@ public class ApplyPatchTests
 			File.WriteAllText(Path.Combine(projectDirectory, folder, "Shared.cs"), "namespace Repro." + folder + ";\n\npublic class Shared { }\n");
 		}
 
-		using var registry = new InstanceRegistry();
+		InstanceRegistry registry = scratch.SharedRegistry;
 		await registry.GetOrAddAsync(solutionPath);
+		RoslynInstance instance = await registry.GetOrAddAsync(solutionPath);
+		await new SolutionFileSync(instance).OnFilesChangedAsync(
+		[
+			Path.Combine(projectDirectory, "A", "Shared.cs"),
+			Path.Combine(projectDirectory, "B", "Shared.cs"),
+		]);
 		var subject = new ApplyPatchTool(registry);
 
 		string result = await subject.ApplyPatch(
@@ -314,8 +350,9 @@ public class ApplyPatchTests
 	[Fact]
 	public async Task WhenRejectionsHaveDifferentReasons_ThenTheMostActionableCodeIsReportedWithEveryReason()
 	{
-		string solutionPath = TestSolutions.CreateScratchSimpleSolution();
-		using var registry = new InstanceRegistry();
+		SharedScratch<ApplyPatchTests> scratch = await SharedScratch<ApplyPatchTests>.ForAsync("SimpleSolution", "SimpleSolution.slnx");
+		string solutionPath = scratch.SolutionPath;
+		InstanceRegistry registry = scratch.SharedRegistry;
 		await registry.GetOrAddAsync(solutionPath);
 		var subject = new ApplyPatchTool(registry);
 
@@ -333,8 +370,9 @@ public class ApplyPatchTests
 	[Fact]
 	public async Task WhenThePatchCreatesANewFile_ThenItIsNotSupported()
 	{
-		string solutionPath = TestSolutions.CreateScratchSimpleSolution();
-		using var registry = new InstanceRegistry();
+		SharedScratch<ApplyPatchTests> scratch = await SharedScratch<ApplyPatchTests>.ForAsync("SimpleSolution", "SimpleSolution.slnx");
+		string solutionPath = scratch.SolutionPath;
+		InstanceRegistry registry = scratch.SharedRegistry;
 		await registry.GetOrAddAsync(solutionPath);
 		var subject = new ApplyPatchTool(registry);
 
@@ -350,8 +388,9 @@ public class ApplyPatchTests
 	[Fact]
 	public async Task WhenAHunkDoesNotMatch_ThenAConflictIsReportedAndNothingIsWritten()
 	{
-		string solutionPath = TestSolutions.CreateScratchSimpleSolution();
-		using var registry = new InstanceRegistry();
+		SharedScratch<ApplyPatchTests> scratch = await SharedScratch<ApplyPatchTests>.ForAsync("SimpleSolution", "SimpleSolution.slnx");
+		string solutionPath = scratch.SolutionPath;
+		InstanceRegistry registry = scratch.SharedRegistry;
 		await registry.GetOrAddAsync(solutionPath);
 		var subject = new ApplyPatchTool(registry);
 
@@ -389,8 +428,9 @@ public class ApplyPatchTests
 	[Fact]
 	public async Task WhenTheHunkHeaderHasNoLineNumbers_ThenTheFileIsStillUpdated()
 	{
-		string solutionPath = TestSolutions.CreateScratchSimpleSolution();
-		using var registry = new InstanceRegistry();
+		SharedScratch<ApplyPatchTests> scratch = await SharedScratch<ApplyPatchTests>.ForAsync("SimpleSolution", "SimpleSolution.slnx");
+		string solutionPath = scratch.SolutionPath;
+		InstanceRegistry registry = scratch.SharedRegistry;
 		await registry.GetOrAddAsync(solutionPath);
 		var subject = new ApplyPatchTool(registry);
 
@@ -407,8 +447,9 @@ public class ApplyPatchTests
 	[Fact]
 	public async Task WhenAFilePatchHasNoHunks_ThenItIsRejected()
 	{
-		string solutionPath = TestSolutions.CreateScratchSimpleSolution();
-		using var registry = new InstanceRegistry();
+		SharedScratch<ApplyPatchTests> scratch = await SharedScratch<ApplyPatchTests>.ForAsync("SimpleSolution", "SimpleSolution.slnx");
+		string solutionPath = scratch.SolutionPath;
+		InstanceRegistry registry = scratch.SharedRegistry;
 		await registry.GetOrAddAsync(solutionPath);
 		var subject = new ApplyPatchTool(registry);
 
@@ -427,8 +468,9 @@ public class ApplyPatchTests
 	{
 		// App's Page.razor still says Count="3". The patch's own write regenerates App's Razor, so Count becomes a
 		// plain attribute at once; no watcher event is needed (its fold would find the snapshot already current).
-		string solutionPath = TestSolutions.CreateScratchRazorMultiProjectSolution();
-		using var registry = new InstanceRegistry();
+		SharedScratch<ApplyPatchTests> scratch = await SharedScratch<ApplyPatchTests>.ForAsync("RazorMultiProjectSolution", "RazorMultiProjectSolution.slnx");
+		string solutionPath = scratch.SolutionPath;
+		InstanceRegistry registry = scratch.SharedRegistry;
 		RoslynInstance instance = await registry.GetOrAddAsync(solutionPath);
 		var subject = new ApplyPatchTool(registry);
 

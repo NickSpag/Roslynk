@@ -19,8 +19,7 @@ public class MultiTargetMergeTests
 	[Fact]
 	public async Task WhenOneTargetFrameworkCannotBindAParameterType_ThenMembersAreListedOnce()
 	{
-		using var registry = new InstanceRegistry();
-		await registry.GetOrAddAsync(TestSolutions.MultiTarget);
+		var registry = await TestSolutions.SharedAsync(TestSolutions.MultiTarget);
 		var subject = new GetMembersTool(registry, new SymbolResolver(), new ProjectionService());
 
 		string result = await subject.GetMembers(TestSolutions.MultiTarget, "Repro.Api");
@@ -32,8 +31,7 @@ public class MultiTargetMergeTests
 	[Fact]
 	public async Task WhenEveryTargetFrameworkBindsTheParameterTypes_ThenMembersAreStillListedOnce()
 	{
-		using var registry = new InstanceRegistry();
-		await registry.GetOrAddAsync(TestSolutions.MultiTarget);
+		var registry = await TestSolutions.SharedAsync(TestSolutions.MultiTarget);
 		var subject = new GetMembersTool(registry, new SymbolResolver(), new ProjectionService());
 
 		string result = await subject.GetMembers(TestSolutions.MultiTarget, "Repro.Api");
@@ -44,8 +42,7 @@ public class MultiTargetMergeTests
 	[Fact]
 	public async Task WhenOneTargetFrameworkCannotBindAParameterType_ThenNameLookupIsNotAmbiguous()
 	{
-		using var registry = new InstanceRegistry();
-		await registry.GetOrAddAsync(TestSolutions.MultiTarget);
+		var registry = await TestSolutions.SharedAsync(TestSolutions.MultiTarget);
 		var subject = new FindReferencesTool(registry, new SymbolResolver(), new ProjectionService());
 
 		string result = await subject.FindReferences(TestSolutions.MultiTarget, "Repro.Api.Accepts");
@@ -57,8 +54,7 @@ public class MultiTargetMergeTests
 	[Fact]
 	public async Task WhenOneTargetFrameworkCannotBindAParameterType_ThenGetSymbolIsNotAmbiguous()
 	{
-		using var registry = new InstanceRegistry();
-		await registry.GetOrAddAsync(TestSolutions.MultiTarget);
+		var registry = await TestSolutions.SharedAsync(TestSolutions.MultiTarget);
 		var subject = new GetSymbolTool(registry, new SymbolResolver(), new ProjectionService());
 
 		string result = await subject.GetSymbol(TestSolutions.MultiTarget, "Repro.Api.Accepts");
@@ -69,8 +65,7 @@ public class MultiTargetMergeTests
 	[Fact]
 	public async Task WhenOneTargetFrameworkCannotBindAParameterType_ThenGetSymbolBodyIsNotAmbiguous()
 	{
-		using var registry = new InstanceRegistry();
-		await registry.GetOrAddAsync(TestSolutions.MultiTarget);
+		var registry = await TestSolutions.SharedAsync(TestSolutions.MultiTarget);
 		var subject = new GetSymbolBodyTool(registry, new SymbolResolver(), new ProjectionService());
 
 		string result = await subject.GetSymbolBody(TestSolutions.MultiTarget, "Repro.Api.Accepts");
@@ -81,8 +76,7 @@ public class MultiTargetMergeTests
 	[Fact]
 	public async Task WhenOneTargetFrameworkCannotBindAParameterType_ThenGetCallersIsNotAmbiguous()
 	{
-		using var registry = new InstanceRegistry();
-		await registry.GetOrAddAsync(TestSolutions.MultiTarget);
+		var registry = await TestSolutions.SharedAsync(TestSolutions.MultiTarget);
 		var subject = new GetCallersTool(registry, new SymbolResolver(), new ProjectionService());
 
 		string result = await subject.GetCallers(TestSolutions.MultiTarget, "Repro.Api.Accepts");
@@ -93,8 +87,7 @@ public class MultiTargetMergeTests
 	[Fact]
 	public async Task WhenOneTargetFrameworkCannotBindAParameterType_ThenSearchReportsOneLocation()
 	{
-		using var registry = new InstanceRegistry();
-		await registry.GetOrAddAsync(TestSolutions.MultiTarget);
+		var registry = await TestSolutions.SharedAsync(TestSolutions.MultiTarget);
 		var subject = new SearchSymbolsTool(registry, new ProjectionService());
 
 		string result = await subject.SearchSymbols(TestSolutions.MultiTarget, "Accepts");

@@ -1,4 +1,4 @@
-using Morris.Roslynk.Features.References.FindReferences;
+﻿using Morris.Roslynk.Features.References.FindReferences;
 using Morris.Roslynk.Infrastructure.Lifecycle;
 using Morris.Roslynk.Infrastructure.Projections;
 using Morris.Roslynk.Infrastructure.Resolution;
@@ -10,8 +10,7 @@ public class FindReferencesTests
 	[Fact]
 	public async Task WhenAReferencedTypeIsRequested_ThenTheOutlineNestsItByFileNamespaceTypeAndMember()
 	{
-		using var registry = new InstanceRegistry();
-		await registry.GetOrAddAsync(TestSolutions.Simple);
+		var registry = await TestSolutions.SharedAsync(TestSolutions.Simple);
 		var subject = new FindReferencesTool(registry, new SymbolResolver(), new ProjectionService());
 
 		string result = await subject.FindReferences(TestSolutions.Simple, "SimpleLibrary.Greeter");
@@ -30,8 +29,7 @@ public class FindReferencesTests
 	[Fact]
 	public async Task WhenTheSymbolIsNotFound_ThenANotFoundHeaderIsReturned()
 	{
-		using var registry = new InstanceRegistry();
-		await registry.GetOrAddAsync(TestSolutions.Simple);
+		var registry = await TestSolutions.SharedAsync(TestSolutions.Simple);
 		var subject = new FindReferencesTool(registry, new SymbolResolver(), new ProjectionService());
 
 		string result = await subject.FindReferences(TestSolutions.Simple, "SimpleLibrary.DoesNotExist");
@@ -56,8 +54,7 @@ public class FindReferencesTests
 	[Fact]
 	public async Task WhenManyReferencesShareDeclarations_ThenTheyNestUnderTheirContainingTypeAndMember()
 	{
-		using var registry = new InstanceRegistry();
-		await registry.GetOrAddAsync(TestSolutions.References);
+		var registry = await TestSolutions.SharedAsync(TestSolutions.References);
 		var subject = new FindReferencesTool(registry, new SymbolResolver(), new ProjectionService());
 
 		string result = await subject.FindReferences(TestSolutions.References, "RefSpace.IThing");
@@ -102,8 +99,7 @@ public class FindReferencesTests
 	[Fact]
 	public async Task WhenAnOverloadIsTargetedBySignature_ThenOnlyThatOverloadsReferencesAreReturned()
 	{
-		using var registry = new InstanceRegistry();
-		await registry.GetOrAddAsync(TestSolutions.Simple);
+		var registry = await TestSolutions.SharedAsync(TestSolutions.Simple);
 		var subject = new FindReferencesTool(registry, new SymbolResolver(), new ProjectionService());
 
 		string result = await subject.FindReferences(TestSolutions.Simple, "SimpleLibrary.Ledger.Add(int)");
@@ -115,8 +111,7 @@ public class FindReferencesTests
 	[Fact]
 	public async Task WhenTheNameMatchesSeveralOverloads_ThenTheCandidatesAreAcceptedBackVerbatim()
 	{
-		using var registry = new InstanceRegistry();
-		await registry.GetOrAddAsync(TestSolutions.Simple);
+		var registry = await TestSolutions.SharedAsync(TestSolutions.Simple);
 		var subject = new FindReferencesTool(registry, new SymbolResolver(), new ProjectionService());
 
 		string ambiguous = await subject.FindReferences(TestSolutions.Simple, "SimpleLibrary.Ledger.Add");
@@ -130,8 +125,7 @@ public class FindReferencesTests
 	[Fact]
 	public async Task WhenCountOnlyIsRequested_ThenCountsAndPerKindLinesAreReturnedWithoutReferences()
 	{
-		using var registry = new InstanceRegistry();
-		await registry.GetOrAddAsync(TestSolutions.Simple);
+		var registry = await TestSolutions.SharedAsync(TestSolutions.Simple);
 		var subject = new FindReferencesTool(registry, new SymbolResolver(), new ProjectionService());
 
 		string normal = await subject.FindReferences(TestSolutions.Simple, "SimpleLibrary.Widget.Compute");

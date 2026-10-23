@@ -10,8 +10,7 @@ public class FindDefinitionTests
 	[Fact]
 	public async Task WhenGivenAUsagePosition_ThenTheDeclarationIsReturned()
 	{
-		using var registry = new InstanceRegistry();
-		await registry.GetOrAddAsync(TestSolutions.Simple);
+		var registry = await TestSolutions.SharedAsync(TestSolutions.Simple);
 		var subject = new FindDefinitionTool(registry, new SymbolResolver(), new ProjectionService());
 
 		string callerPath = Path.Combine(Path.GetDirectoryName(TestSolutions.Simple)!, "SimpleLibrary", "Caller.cs");
@@ -31,8 +30,7 @@ public class FindDefinitionTests
 	[Fact]
 	public async Task WhenGivenASolutionRelativeUsagePath_ThenTheDeclarationIsReturned()
 	{
-		using var registry = new InstanceRegistry();
-		await registry.GetOrAddAsync(TestSolutions.Simple);
+		var registry = await TestSolutions.SharedAsync(TestSolutions.Simple);
 		var subject = new FindDefinitionTool(registry, new SymbolResolver(), new ProjectionService());
 
 		string solutionDir = Path.GetDirectoryName(TestSolutions.Simple)!;

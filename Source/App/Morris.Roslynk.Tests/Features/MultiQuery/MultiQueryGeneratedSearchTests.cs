@@ -1,4 +1,4 @@
-using Microsoft.Extensions.DependencyInjection;
+﻿using Microsoft.Extensions.DependencyInjection;
 using Morris.Roslynk.Features.MultiQuery;
 using Morris.Roslynk.Infrastructure.Lifecycle;
 using Morris.Roslynk.Infrastructure.Projections;
@@ -11,8 +11,7 @@ public class MultiQueryGeneratedSearchTests
 	[Fact]
 	public async Task WhenSearchSymbolsRunsInABatch_ThenGeneratedDeclarationsAreFound()
 	{
-		using var registry = new InstanceRegistry();
-		await registry.GetOrAddAsync(TestSolutions.Generator);
+		var registry = await TestSolutions.SharedAsync(TestSolutions.Generator);
 		var provider = new ServiceCollection()
 			.AddSingleton<InstanceRegistry>(registry)
 			.AddSingleton<SymbolResolver>()

@@ -64,8 +64,7 @@ public class RemoveUnusedUsingsTests
 	[Fact]
 	public async Task WhenThereAreNoUnnecessaryUsings_ThenNothingIsApplied()
 	{
-		using var registry = new InstanceRegistry();
-		await registry.GetOrAddAsync(TestSolutions.Simple);
+		var registry = await TestSolutions.SharedAsync(TestSolutions.Simple);
 		var subject = TestServices.RemoveUnusedUsings(registry);
 
 		string result = await subject.RemoveUnusedUsings(TestSolutions.Simple);

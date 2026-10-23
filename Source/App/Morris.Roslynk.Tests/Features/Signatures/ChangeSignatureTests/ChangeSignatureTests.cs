@@ -46,8 +46,7 @@ public class ChangeSignatureTests
 	[Fact]
 	public async Task WhenTheMethodImplementsAnInterfaceMember_ThenItIsNotSupported()
 	{
-		using var registry = new InstanceRegistry();
-		await registry.GetOrAddAsync(TestSolutions.Simple);
+		var registry = await TestSolutions.SharedAsync(TestSolutions.Simple);
 		var subject = new ChangeSignatureTool(registry, new SymbolResolver(), new ApplyPipeline());
 
 		string result = await subject.ChangeSignature(
@@ -60,8 +59,7 @@ public class ChangeSignatureTests
 	[Fact]
 	public async Task WhenNoDefaultValueIsGiven_ThenItIsRefused()
 	{
-		using var registry = new InstanceRegistry();
-		await registry.GetOrAddAsync(TestSolutions.Simple);
+		var registry = await TestSolutions.SharedAsync(TestSolutions.Simple);
 		var subject = new ChangeSignatureTool(registry, new SymbolResolver(), new ApplyPipeline());
 
 		string result = await subject.ChangeSignature(
@@ -74,8 +72,7 @@ public class ChangeSignatureTests
 	[Fact]
 	public async Task WhenTheMethodIsNotFound_ThenNotFoundIsReturned()
 	{
-		using var registry = new InstanceRegistry();
-		await registry.GetOrAddAsync(TestSolutions.Simple);
+		var registry = await TestSolutions.SharedAsync(TestSolutions.Simple);
 		var subject = new ChangeSignatureTool(registry, new SymbolResolver(), new ApplyPipeline());
 
 		string result = await subject.ChangeSignature(

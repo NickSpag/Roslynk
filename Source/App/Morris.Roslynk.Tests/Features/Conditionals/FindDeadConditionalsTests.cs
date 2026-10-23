@@ -9,8 +9,7 @@ public class FindDeadConditionalsTests
 	[Fact]
 	public async Task WhenAnIfSymbolIsDefinedInNoConfiguration_ThenItsBranchIsFlagged()
 	{
-		using var registry = new InstanceRegistry();
-		await registry.GetOrAddAsync(TestSolutions.Conditional);
+		var registry = await TestSolutions.SharedAsync(TestSolutions.Conditional);
 		var subject = new FindDeadConditionalsTool(registry, new ConditionalCoverage());
 
 		string result = await subject.FindDeadConditionals(TestSolutions.Conditional);
@@ -22,8 +21,7 @@ public class FindDeadConditionalsTests
 	[Fact]
 	public async Task WhenBranchesAreReachableUnderDebugOrRelease_ThenTheyAreNotFlagged()
 	{
-		using var registry = new InstanceRegistry();
-		await registry.GetOrAddAsync(TestSolutions.Conditional);
+		var registry = await TestSolutions.SharedAsync(TestSolutions.Conditional);
 		var subject = new FindDeadConditionalsTool(registry, new ConditionalCoverage());
 
 		string result = await subject.FindDeadConditionals(TestSolutions.Conditional);
@@ -35,8 +33,7 @@ public class FindDeadConditionalsTests
 	[Fact]
 	public async Task WhenCountOnlyIsRequested_ThenTheHeaderAndCountAreReturnedWithoutBranches()
 	{
-		using var registry = new InstanceRegistry();
-		await registry.GetOrAddAsync(TestSolutions.Conditional);
+		var registry = await TestSolutions.SharedAsync(TestSolutions.Conditional);
 		var subject = new FindDeadConditionalsTool(registry, new ConditionalCoverage());
 
 		string result = await subject.FindDeadConditionals(TestSolutions.Conditional, countOnly: true);

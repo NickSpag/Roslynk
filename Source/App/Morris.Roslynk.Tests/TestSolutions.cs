@@ -1,5 +1,6 @@
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using System.Text;
+using Morris.Roslynk.Infrastructure.Lifecycle;
 
 namespace Morris.Roslynk.Tests;
 
@@ -42,6 +43,40 @@ internal static class TestSolutions
 		WriteLargeTypeGeneratedSources(Path.Combine(Path.GetDirectoryName(path)!, "LargeTypeLib"));
 		return path;
 	});
+
+	// Fixtures whose projects carry a PackageReference/FrameworkReference or a netstandard target:
+	// MSBuildWorkspace's design-time build resolves those from obj/project.assets.json, so the copy
+	// must be restored. A package-free single-TFM fixture loads cleanly without any restore.
+	private static readonly HashSet<string> FixturesNeedingRestore = new(StringComparer.OrdinalIgnoreCase)
+	{
+		"RazorSolution",
+		"RazorInjectSolution",
+		"BindSolution",
+		"RazorMultiProjectSolution",
+		"CodeStyleSolution",
+		"GeneratorSolution",
+		"MultiTargetSolution",
+	};
+
+	// One registry for the whole test process. Committed fixtures are read-only, so tests that only
+	// read share the loaded snapshot (and Roslyn's compilation and SymbolFinder caches). Never dispose
+	// it: a disposed registry would tear down instances other tests are using.
+	private static readonly InstanceRegistry SharedRegistry = new();
+
+	/// <summary>The process-wide registry for read-only fixture tests. Do not dispose.</summary>
+	public static InstanceRegistry Shared => SharedRegistry;
+
+	/// <summary>Returns the shared registry with <paramref name="solutionPath"/> loaded and ready.</summary>
+	public static async Task<InstanceRegistry> SharedAsync(string solutionPath)
+	{
+		await SharedRegistry.GetOrAddAsync(solutionPath);
+		return SharedRegistry;
+	}
+
+	private static readonly Lazy<string> CshtmlSolutionPath = new(() => Prepare("CshtmlSolution", "CshtmlSolution.slnx"));
+
+	/// <summary>An MVC view solution with a used and an unused <c>@using</c>.</summary>
+	public static string Cshtml => CshtmlSolutionPath.Value;
 
 	/// <summary>A clean single-project solution.</summary>
 	public static string Simple => SimpleSolution.Value;
@@ -146,9 +181,14 @@ internal static class TestSolutions
 	private static string Prepare(params string[] relativeParts)
 	{
 		string path = Path.Combine([FindTestFixturesRoot(), .. relativeParts]);
-		Restore(path);
+		if (FixturesNeedingRestore.Contains(relativeParts[0]))
+			Restore(path);
 		return path;
 	}
+
+	/// <summary>The committed fixture directory, for restoring a scratch copy.</summary>
+	internal static string FixtureDirectory(string fixtureName) =>
+		Path.Combine(FindTestFixturesRoot(), fixtureName);
 
 	private static string FindTestFixturesRoot()
 	{
@@ -265,14 +305,15 @@ internal static class TestSolutions
 	public static void BuildScratchGenerator(string solutionPath) =>
 		Build(Path.Combine(Path.GetDirectoryName(solutionPath)!, "GeneratorLib", "GeneratorLib.csproj"));
 
-	private static string CreateScratch(string fixtureName, string solutionFile)
+	internal static string CreateScratch(string fixtureName, string solutionFile)
 	{
 		string sourceDir = Path.Combine(FindTestFixturesRoot(), fixtureName);
 		string destDir = Path.Combine(Path.GetTempPath(), "roslynk-tests", Guid.NewGuid().ToString("N"), fixtureName);
 		CopyExcludingBuildOutput(sourceDir, destDir);
 
 		string solutionPath = Path.Combine(destDir, solutionFile);
-		Restore(solutionPath);
+		if (FixturesNeedingRestore.Contains(fixtureName))
+			Restore(solutionPath);
 		return solutionPath;
 	}
 

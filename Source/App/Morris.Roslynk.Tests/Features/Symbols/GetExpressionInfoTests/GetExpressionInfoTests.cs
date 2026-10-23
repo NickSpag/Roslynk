@@ -1,4 +1,4 @@
-using System.Text.Json;
+﻿using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
 using Morris.Roslynk.Features.MultiQuery;
 using Morris.Roslynk.Features.Symbols.GetExpressionInfo;
@@ -152,8 +152,7 @@ public class GetExpressionInfoTests
 	[Fact]
 	public async Task WhenPositionedInARazorCodeBlock_ThenTheExpressionIsReportedAtItsRazorLocation()
 	{
-		using var registry = new InstanceRegistry();
-		await registry.GetOrAddAsync(TestSolutions.Razor);
+		var registry = await TestSolutions.SharedAsync(TestSolutions.Razor);
 		var subject = new GetExpressionInfoTool(registry, new ProjectionService());
 		string counterPath = Path.Combine(Path.GetDirectoryName(TestSolutions.Razor)!, "RazorLib", "Counter.razor");
 
@@ -171,8 +170,7 @@ public class GetExpressionInfoTests
 	[Fact]
 	public async Task WhenTheFileIsNotInTheSolution_ThenNotFoundIsReported()
 	{
-		using var registry = new InstanceRegistry();
-		await registry.GetOrAddAsync(TestSolutions.Expressions);
+		var registry = await TestSolutions.SharedAsync(TestSolutions.Expressions);
 		var subject = new GetExpressionInfoTool(registry, new ProjectionService());
 
 		string result = await subject.GetExpressionInfo(TestSolutions.Expressions, "Missing.cs", 1, 1);
@@ -196,8 +194,7 @@ public class GetExpressionInfoTests
 	[Fact]
 	public async Task WhenRunThroughMultiQuery_ThenEachSlotReportsItsExpression()
 	{
-		using var registry = new InstanceRegistry();
-		await registry.GetOrAddAsync(TestSolutions.Expressions);
+		var registry = await TestSolutions.SharedAsync(TestSolutions.Expressions);
 		var provider = new ServiceCollection()
 			.AddSingleton(registry)
 			.AddSingleton<SymbolResolver>()
@@ -231,8 +228,7 @@ public class GetExpressionInfoTests
 
 	private static async Task<string> QueryAsync(string anchor, int offset = 0)
 	{
-		using var registry = new InstanceRegistry();
-		await registry.GetOrAddAsync(TestSolutions.Expressions);
+		var registry = await TestSolutions.SharedAsync(TestSolutions.Expressions);
 		var subject = new GetExpressionInfoTool(registry, new ProjectionService());
 
 		(int line, int column) = await PositionOfAsync(anchor, offset);

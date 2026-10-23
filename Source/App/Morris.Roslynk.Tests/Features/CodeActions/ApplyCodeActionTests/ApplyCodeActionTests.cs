@@ -45,8 +45,7 @@ public class ApplyCodeActionTests
 	[Fact]
 	public async Task WhenTheActionIdIsInvalid_ThenItIsRefused()
 	{
-		using var registry = new InstanceRegistry();
-		await registry.GetOrAddAsync(TestSolutions.Simple);
+		var registry = await TestSolutions.SharedAsync(TestSolutions.Simple);
 		var subject = new ApplyCodeActionTool(registry, TestServices.CodeActions(), new ApplyPipeline());
 
 		string result = await subject.ApplyCodeAction(TestSolutions.Simple, "not-a-valid-id");

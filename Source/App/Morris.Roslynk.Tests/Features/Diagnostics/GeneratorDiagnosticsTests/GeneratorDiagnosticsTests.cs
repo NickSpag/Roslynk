@@ -1,4 +1,4 @@
-using Morris.Roslynk.Features.Diagnostics.GetDiagnostics;
+﻿using Morris.Roslynk.Features.Diagnostics.GetDiagnostics;
 using Morris.Roslynk.Infrastructure.Diagnostics;
 using Morris.Roslynk.Infrastructure.Lifecycle;
 using Morris.Roslynk.Infrastructure.Workspaces;
@@ -10,8 +10,7 @@ public class GeneratorDiagnosticsTests
 	[Fact]
 	public async Task WhenAProjectReferencesASourceGenerator_ThenGeneratedTypesAreInTheCompilation()
 	{
-		using var registry = new InstanceRegistry();
-		await registry.GetOrAddAsync(TestSolutions.Generator);
+		var registry = await TestSolutions.SharedAsync(TestSolutions.Generator);
 		var subject = new GetDiagnosticsTool(registry, new DiagnosticsService());
 
 		string result = await subject.GetDiagnostics(TestSolutions.Generator);

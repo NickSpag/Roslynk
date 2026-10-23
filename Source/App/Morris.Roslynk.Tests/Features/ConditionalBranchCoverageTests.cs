@@ -21,8 +21,7 @@ public class ConditionalBranchCoverageTests
 	[Fact]
 	public async Task FindImplementations_FindsImplementorInElseBranch()
 	{
-		using var registry = new InstanceRegistry();
-		await registry.GetOrAddAsync(TestSolutions.Conditional);
+		var registry = await TestSolutions.SharedAsync(TestSolutions.Conditional);
 		var subject = new FindImplementationsTool(registry, new SymbolResolver(), new ProjectionService());
 
 		string result = await subject.FindImplementations(TestSolutions.Conditional, "ConditionalLib.IShape");
@@ -33,8 +32,7 @@ public class ConditionalBranchCoverageTests
 	[Fact]
 	public async Task GetTypeHierarchy_FindsDerivedTypeInElseBranch()
 	{
-		using var registry = new InstanceRegistry();
-		await registry.GetOrAddAsync(TestSolutions.Conditional);
+		var registry = await TestSolutions.SharedAsync(TestSolutions.Conditional);
 		var subject = new GetTypeHierarchyTool(registry, new SymbolResolver(), new ProjectionService());
 
 		string result = await subject.GetTypeHierarchy(TestSolutions.Conditional, "ConditionalLib.Animal");
@@ -45,8 +43,7 @@ public class ConditionalBranchCoverageTests
 	[Fact]
 	public async Task GetMembers_FindsMemberInElseBranch()
 	{
-		using var registry = new InstanceRegistry();
-		await registry.GetOrAddAsync(TestSolutions.Conditional);
+		var registry = await TestSolutions.SharedAsync(TestSolutions.Conditional);
 		var subject = new GetMembersTool(registry, new SymbolResolver(), new ProjectionService());
 
 		string result = await subject.GetMembers(TestSolutions.Conditional, "ConditionalLib.Box");
@@ -57,8 +54,7 @@ public class ConditionalBranchCoverageTests
 	[Fact]
 	public async Task SearchSymbols_FindsTypeDeclaredOnlyInElseBranch()
 	{
-		using var registry = new InstanceRegistry();
-		await registry.GetOrAddAsync(TestSolutions.Conditional);
+		var registry = await TestSolutions.SharedAsync(TestSolutions.Conditional);
 		var subject = new SearchSymbolsTool(registry, new ProjectionService());
 
 		string result = await subject.SearchSymbols(TestSolutions.Conditional, "Widget");
@@ -69,8 +65,7 @@ public class ConditionalBranchCoverageTests
 	[Fact]
 	public async Task GetCallers_FindsCallerInElseBranch()
 	{
-		using var registry = new InstanceRegistry();
-		await registry.GetOrAddAsync(TestSolutions.Conditional);
+		var registry = await TestSolutions.SharedAsync(TestSolutions.Conditional);
 		var subject = new GetCallersTool(registry, new SymbolResolver(), new ProjectionService());
 
 		string result = await subject.GetCallers(TestSolutions.Conditional, "ConditionalLib.Target.Ping");
@@ -81,8 +76,7 @@ public class ConditionalBranchCoverageTests
 	[Fact]
 	public async Task GetSymbol_ResolvesSymbolDeclaredOnlyInElseBranch()
 	{
-		using var registry = new InstanceRegistry();
-		await registry.GetOrAddAsync(TestSolutions.Conditional);
+		var registry = await TestSolutions.SharedAsync(TestSolutions.Conditional);
 		var subject = new GetSymbolTool(registry, new SymbolResolver(), new ProjectionService());
 
 		string result = await subject.GetSymbol(TestSolutions.Conditional, "ConditionalLib.ReleaseWidget");
@@ -94,8 +88,7 @@ public class ConditionalBranchCoverageTests
 	[Fact]
 	public async Task FindDefinition_ResolvesAUsageInsideTheElseBranch()
 	{
-		using var registry = new InstanceRegistry();
-		await registry.GetOrAddAsync(TestSolutions.Conditional);
+		var registry = await TestSolutions.SharedAsync(TestSolutions.Conditional);
 		var subject = new FindDefinitionTool(registry, new SymbolResolver(), new ProjectionService());
 
 		string navigation = Path.Combine(Path.GetDirectoryName(TestSolutions.Conditional)!, "ConditionalLib", "Navigation.cs");

@@ -1,4 +1,4 @@
-using Morris.Roslynk.Features.Callers.GetCallees;
+﻿using Morris.Roslynk.Features.Callers.GetCallees;
 using Morris.Roslynk.Features.Callers.GetCallers;
 using Morris.Roslynk.Features.References.FindReads;
 using Morris.Roslynk.Features.References.FindReferences;
@@ -175,8 +175,7 @@ public class GeneratedDeclarationsTests
 
 	private static async Task<string> WithToolAsync(Func<InstanceRegistry, Task<string>> run)
 	{
-		using var registry = new InstanceRegistry();
-		await registry.GetOrAddAsync(TestSolutions.Generator);
+		var registry = await TestSolutions.SharedAsync(TestSolutions.Generator);
 		return await run(registry);
 	}
 }

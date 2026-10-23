@@ -11,8 +11,7 @@ public class AnalyzerDiagnosticsTests
 	{
 		// The IDE0005 analyzer reports a second, message-less diagnostic that exists only to trigger its
 		// fixer; listing it would give an agent an id with nothing to act on.
-		using var registry = new InstanceRegistry();
-		await registry.GetOrAddAsync(TestSolutions.CodeStyle);
+		var registry = await TestSolutions.SharedAsync(TestSolutions.CodeStyle);
 		var subject = new GetDiagnosticsTool(registry, new DiagnosticsService());
 
 		string result = await subject.GetDiagnostics(
@@ -25,8 +24,7 @@ public class AnalyzerDiagnosticsTests
 	[Fact]
 	public async Task WhenAnalyzersAreIncluded_ThenNonCompilerDiagnosticsAppear()
 	{
-		using var registry = new InstanceRegistry();
-		await registry.GetOrAddAsync(TestSolutions.Simple);
+		var registry = await TestSolutions.SharedAsync(TestSolutions.Simple);
 		var subject = new GetDiagnosticsTool(registry, new DiagnosticsService());
 
 		string result = await subject.GetDiagnostics(
@@ -39,8 +37,7 @@ public class AnalyzerDiagnosticsTests
 	[Fact]
 	public async Task WhenAnalyzersAreExcluded_ThenOnlyCompilerDiagnosticsAppear()
 	{
-		using var registry = new InstanceRegistry();
-		await registry.GetOrAddAsync(TestSolutions.Simple);
+		var registry = await TestSolutions.SharedAsync(TestSolutions.Simple);
 		var subject = new GetDiagnosticsTool(registry, new DiagnosticsService());
 
 		string result = await subject.GetDiagnostics(
