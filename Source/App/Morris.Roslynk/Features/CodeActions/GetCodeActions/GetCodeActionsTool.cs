@@ -52,8 +52,36 @@ public sealed class GetCodeActionsTool
 		CancellationToken cancellationToken = default)
 	{
 		RoslynInstance instance = await InstanceRegistry.GetOrBeginAsync(solutionId, cancellationToken);
-		SolutionModel model = await instance.ReadModelAsync(cancellationToken);
+		return await QueryExecution.QueryAsync(
+			instance,
+			(model, token) =>
+				GetCodeActionsCoreAsync(
+					model: model,
+					instance: instance,
+					filePath: filePath,
+					line: line,
+					column: column,
+					endLine: endLine,
+					endColumn: endColumn,
+					cancellationToken: token
+				),
+			cancellationToken);
+	}
 
+	/// <summary>
+	/// The pinned-snapshot core: resolves the position and discovers actions against the captured model
+	/// only, so a publication mid-flight cannot mix two generations into one action list.
+	/// </summary>
+	internal async Task<string> GetCodeActionsCoreAsync(
+		SolutionModel model,
+		RoslynInstance instance,
+		string filePath,
+		int line,
+		int column,
+		int? endLine,
+		int? endColumn,
+		CancellationToken cancellationToken = default)
+	{
 		if (model.Solution is null)
 			return OutlineError.Format(Error.Indexing(instance.LoadedProjects), model.Status);
 

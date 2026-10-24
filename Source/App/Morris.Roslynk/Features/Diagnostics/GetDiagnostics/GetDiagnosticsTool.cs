@@ -75,8 +75,50 @@ public sealed class GetDiagnosticsTool
 		CancellationToken cancellationToken = default)
 	{
 		RoslynInstance instance = await InstanceRegistry.GetOrBeginAsync(solutionId, cancellationToken);
-		SolutionModel model = await instance.ReadModelAsync();
+		return await QueryExecution.QueryAsync(
+			instance,
+			(model, token) =>
+				GetDiagnosticsCoreAsync(
+					model: model,
+					instance: instance,
+					includeErrors: includeErrors,
+					includeWarnings: includeWarnings,
+					includeInfo: includeInfo,
+					includeHidden: includeHidden,
+					includeAnalyzers: includeAnalyzers,
+					projectName: projectName,
+					filePath: filePath,
+					ids: ids,
+					summaryOnly: summaryOnly,
+					startItem: startItem,
+					maxSize: maxSize,
+					countOnly: countOnly,
+					cancellationToken: token
+				),
+			cancellationToken);
+	}
 
+	/// <summary>
+	/// The pinned-snapshot core: filters, counts and renders against the captured model only, and reports
+	/// its own status from that model rather than re-reading the live one mid-flight.
+	/// </summary>
+	internal async Task<string> GetDiagnosticsCoreAsync(
+		SolutionModel model,
+		RoslynInstance instance,
+		bool includeErrors,
+		bool includeWarnings,
+		bool includeInfo,
+		bool includeHidden,
+		bool includeAnalyzers,
+		string? projectName,
+		string? filePath,
+		string[]? ids,
+		bool summaryOnly,
+		int startItem,
+		int maxSize,
+		bool countOnly,
+		CancellationToken cancellationToken = default)
+	{
 		if (model.Solution is null)
 			return OutlineError.Format(Error.Indexing(instance.LoadedProjects), model.Status);
 
@@ -241,7 +283,7 @@ public sealed class GetDiagnosticsTool
 		RenderBody(new OutlineBuilder(), collected);
 
 		PagedRender render = ItemPaging.Render(
-			instance.CurrentModel.Status,
+			model.Status,
 			builder =>
 			{
 				if (projectNameFilter is string echoedProject)
@@ -278,7 +320,7 @@ public sealed class GetDiagnosticsTool
 		{
 			PagedRender.Complete complete => complete.Output,
 			PagedRender.Page paged => paged.Output,
-			PagedRender.Invalid invalid => OutlineError.Format(Error.Invalid(invalid.Message), instance.CurrentModel.Status),
+			PagedRender.Invalid invalid => OutlineError.Format(Error.Invalid(invalid.Message), model.Status),
 			_ => throw new InvalidOperationException($"Unexpected paged render {render.GetType().Name}."),
 		};
 	}

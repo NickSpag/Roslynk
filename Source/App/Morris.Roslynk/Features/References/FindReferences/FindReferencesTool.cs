@@ -60,8 +60,20 @@ public sealed class FindReferencesTool
 		CancellationToken cancellationToken = default)
 	{
 		RoslynInstance instance = await InstanceRegistry.GetOrBeginAsync(solutionId, cancellationToken);
-		SolutionModel model = await instance.ReadModelAsync(cancellationToken);
-		return await FindReferencesCoreAsync(model, instance, symbolName, startItem, maxSize, countOnly, Budget, cancellationToken);
+		return await QueryExecution.QueryAsync(
+			instance,
+			(model, token) =>
+				FindReferencesCoreAsync(
+					model: model,
+					instance: instance,
+					symbolName: symbolName,
+					startItem: startItem,
+					maxSize: maxSize,
+					countOnly: countOnly,
+					budget: Budget,
+					cancellationToken: token
+				),
+			cancellationToken);
 	}
 
 	internal async Task<string> FindReferencesCoreAsync(
@@ -161,7 +173,7 @@ public sealed class FindReferencesTool
 			items: root.Items(),
 			startItem: startItem,
 			maxSize: maxSize,
-			budget: Budget,
+			budget: budget,
 			countOnly: countOnly);
 		return render switch
 		{

@@ -85,8 +85,17 @@ public sealed partial class GetExpressionInfoTool
 		CancellationToken cancellationToken = default)
 	{
 		RoslynInstance instance = await InstanceRegistry.GetOrBeginAsync(solutionId, cancellationToken);
-		SolutionModel model = await instance.ReadModelAsync();
-		return await GetExpressionInfoCoreAsync(model, instance, filePath, line, column, CancellationToken.None);
+		return await QueryExecution.QueryAsync(
+			instance,
+			(model, _) =>
+				GetExpressionInfoCoreAsync(
+					model: model,
+					instance: instance,
+					filePath: filePath,
+					line: line,
+					column: column
+				),
+			cancellationToken);
 	}
 
 	internal async Task<string> GetExpressionInfoCoreAsync(SolutionModel model, RoslynInstance instance, string filePath, int line, int column, CancellationToken token = default)
@@ -108,11 +117,11 @@ public sealed partial class GetExpressionInfoTool
 
 		SourceText sourceText = await document.GetSourceTextAsync(token);
 		if (line < 1 || line > sourceText.Lines.Count)
-			return Failure(Error.NotFound($"Line {line} is outside '{filePath}', which has {sourceText.Lines.Count} lines."));
+			return Failure(Error.NotFound($"line {line} is outside '{filePath}', which has {sourceText.Lines.Count} lines."));
 
 		TextLine textLine = sourceText.Lines[line - 1];
 		if (column < 1 || column - 1 > textLine.End - textLine.Start)
-			return Failure(Error.NotFound($"Column {column} is outside line {line} of '{filePath}'."));
+			return Failure(Error.NotFound($"column {column} is outside line {line} of '{filePath}'."));
 
 		int sourcePosition = textLine.Start + column - 1;
 

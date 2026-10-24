@@ -50,8 +50,20 @@ public sealed class FindReadsTool
 		CancellationToken cancellationToken = default)
 	{
 		RoslynInstance instance = await InstanceRegistry.GetOrBeginAsync(solutionId, cancellationToken);
-		SolutionModel model = await instance.ReadModelAsync(cancellationToken);
-		return await FindReadsCoreAsync(model, instance, symbolName, startItem, maxSize, countOnly, Budget, cancellationToken);
+		return await QueryExecution.QueryAsync(
+			instance,
+			(model, token) =>
+				FindReadsCoreAsync(
+					model: model,
+					instance: instance,
+					symbolName: symbolName,
+					startItem: startItem,
+					maxSize: maxSize,
+					countOnly: countOnly,
+					budget: Budget,
+					cancellationToken: token
+				),
+			cancellationToken);
 	}
 
 	internal Task<string> FindReadsCoreAsync(

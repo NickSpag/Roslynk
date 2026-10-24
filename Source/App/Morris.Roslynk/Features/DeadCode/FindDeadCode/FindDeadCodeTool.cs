@@ -89,8 +89,20 @@ public sealed class FindDeadCodeTool
 		CancellationToken cancellationToken = default)
 	{
 		RoslynInstance instance = await InstanceRegistry.GetOrBeginAsync(solutionId, cancellationToken);
-		SolutionModel model = await instance.ReadModelAsync();
-		return await FindDeadCodeCoreAsync(model, instance, scope, includePublic, maxSize, startItem, countOnly, Budget, CancellationToken.None);
+		return await QueryExecution.QueryAsync(
+			instance,
+			(model, _) =>
+				FindDeadCodeCoreAsync(
+					model: model,
+					instance: instance,
+					scope: scope,
+					includePublic: includePublic,
+					maxSize: maxSize,
+					startItem: startItem,
+					countOnly: countOnly,
+					budget: Budget
+				),
+			cancellationToken);
 	}
 
 	internal async Task<string> FindDeadCodeCoreAsync(

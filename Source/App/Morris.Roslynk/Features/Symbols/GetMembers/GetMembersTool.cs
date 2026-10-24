@@ -70,8 +70,26 @@ public sealed class GetMembersTool
 		CancellationToken cancellationToken = default)
 	{
 		RoslynInstance instance = await InstanceRegistry.GetOrBeginAsync(solutionId, cancellationToken);
-		SolutionModel model = await instance.ReadModelAsync();
-		return await GetMembersCoreAsync(model, instance, symbolName, includeInherited, nameFilter, includeMethods, includeFields, includeProperties, includeEvents, includeNestedTypes, startItem, maxSize, countOnly, Budget, CancellationToken.None);
+		return await QueryExecution.QueryAsync(
+			instance,
+			(model, _) =>
+				GetMembersCoreAsync(
+					model: model,
+					instance: instance,
+					symbolName: symbolName,
+					includeInherited: includeInherited,
+					nameFilter: nameFilter,
+					includeMethods: includeMethods,
+					includeFields: includeFields,
+					includeProperties: includeProperties,
+					includeEvents: includeEvents,
+					includeNestedTypes: includeNestedTypes,
+					startItem: startItem,
+					maxSize: maxSize,
+					countOnly: countOnly,
+					budget: Budget
+				),
+			cancellationToken);
 	}
 
 	internal async Task<string> GetMembersCoreAsync(
@@ -169,11 +187,11 @@ public sealed class GetMembersTool
 			}
 		}
 
-		var entries = new List<(string? Project, string File, int Order, string Line, IReadOnlyList<(int Depth, string Line)> LocalFunctions)>();
+		var entries = new List<(string? Project, string File, int Order, string Line, IReadOnlyList<(int Depth, string line)> LocalFunctions)>();
 		foreach ((ISymbol member, Solution memberSolution) in memberCopies.Items)
 		{
 			(string? project, string file, int order, string line) = await RenderAsync(member, memberSolution, solutionDirectory, token);
-			var localFunctions = new List<(int Depth, string Line)>();
+			var localFunctions = new List<(int Depth, string line)>();
 			await AddLocalFunctionsAsync(localFunctions, member, depth: 1, memberSolution, solutionDirectory, token);
 			entries.Add((project, file, order, line, localFunctions));
 		}
