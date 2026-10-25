@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-- With `Roslynk:LoadFromCompilerCommandLines=true`, a solution whose projects each kept their C# compiler command line from the last build (`obj/Debug/<framework>/<project file>.csc.rsp`; README, "Faster solution loads") is built from those files without MSBuild, in seconds; any project without a current one loads the whole solution through MSBuild as before (Fixes #ISSUE)
+- With `Roslynk:LoadFromCompilerCommandLines=true`, a solution whose projects each kept their C# compiler command line from the last build (`obj/Debug/<framework>/<project file>.csc.rsp`; README, "Faster solution loads") is built from those files without MSBuild, in seconds; any project without a current one loads the whole solution through MSBuild as before (Fixes #170)
 - Read-only tools run through a shared snapshot guard that returns `error=Stale` (with the current `snapshot=<id>`) when the solution changes mid-query or the query is cancelled, and `multi_query` rejects the whole batch rather than mixing generations; write tools stay on the write pipeline (Fixes #165)
 - `get_solution_status` reports NuGet restore warnings (NU1902/NU1903/NU1510 ...) as `loadWarning=<code>: <message>` instead of `loadDiagnostic=`, by matching each load failure's text against the Warning-level entries the restore wrote to the projects' `project.assets.json` (Fixes #163)
 - `search_symbols`, `get_callees`, `get_callers` and `find_implementations` report a symbol declared in a `.razor`/`.cshtml` file under that file with its mapped position instead of the virtual generated `.g.cs` path, which has no file on disk (Fixes #164)
