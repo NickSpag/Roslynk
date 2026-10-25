@@ -77,7 +77,7 @@ public sealed class SolutionWorkspace : IDisposable
 		string solutionPath,
 		IProgress<ProjectLoadProgress>? progress = null,
 		CancellationToken cancellationToken = default,
-		bool useCompilerCommandLines = true)
+		bool useCompilerCommandLines = false)
 	{
 		if (solutionPath is null)
 			throw new ArgumentNullException(nameof(solutionPath));

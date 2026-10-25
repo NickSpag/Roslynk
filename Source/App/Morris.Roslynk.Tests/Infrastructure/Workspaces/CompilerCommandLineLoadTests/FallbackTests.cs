@@ -15,7 +15,7 @@ public class FallbackTests
 	{
 		string solutionPath = TestSolutions.CreateScratchLinkedSolution();
 
-		using SolutionWorkspace subject = await SolutionWorkspace.LoadAsync(solutionPath);
+		using SolutionWorkspace subject = await SolutionWorkspace.LoadAsync(solutionPath, useCompilerCommandLines: true);
 
 		Assert.True(subject.LoadedFromCompilerCommandLines);
 		Project app = Assert.Single(subject.Solution.Projects, p => p.Name == "App");
@@ -24,10 +24,10 @@ public class FallbackTests
 	}
 
 	[Fact]
-	public async Task WhenLoadingFromCommandLinesIsTurnedOff_ThenTheRegistryLoadsThroughMSBuild()
+	public async Task WhenTheRegistryUsesTheDefault_ThenItLoadsThroughMSBuildEvenWithKeptCommandLines()
 	{
 		string solutionPath = TestSolutions.CreateScratchLinkedSolution();
-		using var registry = new InstanceRegistry(compilerCommandLineLoading: new CompilerCommandLineLoading(false));
+		using var registry = new InstanceRegistry();
 
 		RoslynInstance instance = await registry.GetOrAddAsync(solutionPath);
 
@@ -36,10 +36,10 @@ public class FallbackTests
 	}
 
 	[Fact]
-	public async Task WhenTheRegistryUsesTheDefault_ThenItLoadsFromKeptCommandLines()
+	public async Task WhenLoadingFromCommandLinesIsTurnedOn_ThenTheRegistryLoadsFromThem()
 	{
 		string solutionPath = TestSolutions.CreateScratchLinkedSolution();
-		using var registry = new InstanceRegistry();
+		using var registry = new InstanceRegistry(compilerCommandLineLoading: new CompilerCommandLineLoading(true));
 
 		RoslynInstance instance = await registry.GetOrAddAsync(solutionPath);
 
@@ -49,7 +49,7 @@ public class FallbackTests
 	[Fact]
 	public async Task WhenNoProjectKeptItsCommandLine_ThenLoadAsyncLoadsThroughMSBuild()
 	{
-		using SolutionWorkspace subject = await SolutionWorkspace.LoadAsync(TestSolutions.CreateScratchSimpleSolution());
+		using SolutionWorkspace subject = await SolutionWorkspace.LoadAsync(TestSolutions.CreateScratchSimpleSolution(), useCompilerCommandLines: true);
 
 		Assert.False(subject.LoadedFromCompilerCommandLines);
 		Assert.Single(subject.Solution.Projects);

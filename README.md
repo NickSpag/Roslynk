@@ -322,7 +322,7 @@ All `Roslynk:*` settings come from one typed object bound from the `Roslynk` sec
 | `Roslynk:LoadWaitSeconds` | 30 | How long solution-scoped tools wait server-side for an in-flight initial load before returning `error=Indexing`; `0` means do not wait. |
 | `Roslynk:IdleEvictionMinutes` | 30 | Minutes a solution may sit unused before the daemon evicts it; 0 disables eviction. |
 | `Roslynk:EvictionCheckMinutes` | 5 | Minutes between idle-eviction sweeps; floored at 1. |
-| `Roslynk:LoadFromCompilerCommandLines` | true | Build a solution from the compiler command lines its build kept, when every project has a current one ("Faster solution loads"); `false` always loads through MSBuild. |
+| `Roslynk:LoadFromCompilerCommandLines` | false | `true` builds a solution from the compiler command lines its build kept, when every project has a current one ("Faster solution loads"), instead of loading it through MSBuild. |
 
 To change a setting, copy or rename `appsettings.json.example` to `appsettings.json` beside the executable and uncomment what you need, then restart the daemon. The loader accepts JavaScript/C#-style comments, but VS Code flags them as errors in `.json` files unless you associate the file with JSONC in your settings:
 
@@ -342,7 +342,7 @@ design-time build would find, the C# compiler's command line, beside each projec
 of the solution has a current one, Roslynk builds the solution from those files instead, without MSBuild: on a
 133-project solution, `open_solution` was ready in 5.8s instead of 32s, with the same diagnostics, references and
 callers. Add this to a `Directory.Build.targets` that every project imports, then
-build (Debug):
+build (Debug), and set `Roslynk:LoadFromCompilerCommandLines` to `true` (or `Roslynk__LoadFromCompilerCommandLines=true`):
 
 ```xml
 <Project>
@@ -362,8 +362,7 @@ the project file, the `Directory.*.props`/`.targets` above it or its `project.as
 must exist, and no C# file it does not list may have been added since. If any project fails that, or a project has
 none, the whole solution loads through MSBuild as before. Projects whose SDK compiles nothing (`Microsoft.Build.NoTargets`,
 `Microsoft.Build.Traversal`) are left out, and the solution is what the compiler saw: a generated file the design-time
-build leaves out (MVC's `MvcApplicationPartsAssemblyInfo.cs`) is included. `Roslynk:LoadFromCompilerCommandLines=false`
-(`Roslynk__LoadFromCompilerCommandLines=false`) turns it off.
+build leaves out (MVC's `MvcApplicationPartsAssemblyInfo.cs`) is included.
 
 ## Run (Windows)
 

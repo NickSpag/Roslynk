@@ -343,7 +343,12 @@ internal static class TestSolutions
 
 		string solutionPath = Path.Combine(root, "LinkedSolution.slnx");
 		Restore(solutionPath);
-		BuildKeepingCompilerCommandLines(solutionPath);
+		// Lib, then App, rather than the solution: a solution build can build Lib for App's reference while it
+		// builds Lib itself, and the two then race to write the same deps.json. Without restoring again, which would
+		// rewrite Lib's project.assets.json after Lib's command line was kept.
+		File.WriteAllText(Path.Combine(root, "Directory.Build.targets"), KeepCompilerCommandLineTargets);
+		RunDotnet("build --no-restore", Path.Combine(root, "Lib", "Lib.csproj"));
+		RunDotnet("build --no-restore", Path.Combine(root, "App", "App.csproj"));
 		return solutionPath;
 	}
 

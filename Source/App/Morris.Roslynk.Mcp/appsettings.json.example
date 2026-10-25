@@ -19,8 +19,8 @@
 		// Minutes between idle-eviction sweeps; floored at 1.
 		// 	"EvictionCheckMinutes": 5,
 
-		// false loads every solution through MSBuild, even where its build kept each project's compiler command line.
-		// 	"LoadFromCompilerCommandLines": true
+		// true builds a solution from the compiler command lines its build kept, instead of loading it through MSBuild.
+		// 	"LoadFromCompilerCommandLines": false
 		
 	},
 	"Logging": {

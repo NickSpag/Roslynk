@@ -21,7 +21,7 @@ public static class ServicesRegistration
 	/// <paramref name="loadWaitTimeout"/> bounds how long solution-scoped tools wait for an in-flight initial
 	/// load; hosts read 'Roslynk:LoadWaitSeconds' and pass the plain value, otherwise 30 seconds applies. The
 	/// optional <paramref name="compilerCommandLineLoading"/> says whether loads may use kept compiler command
-	/// lines; hosts read 'Roslynk:LoadFromCompilerCommandLines', otherwise they may.
+	/// lines; hosts read 'Roslynk:LoadFromCompilerCommandLines', otherwise they do not.
 	/// </summary>
 	public static IServiceCollection AddRoslynk(
 		this IServiceCollection services,

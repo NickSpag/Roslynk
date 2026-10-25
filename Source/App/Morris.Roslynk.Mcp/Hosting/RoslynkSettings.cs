@@ -37,7 +37,7 @@ public sealed class RoslynkSettings
 
 	/// <summary>
 	/// Whether a solution may be built from the compiler command lines its build kept, instead of loading through
-	/// MSBuild; absent means it may.
+	/// MSBuild; absent means it is not.
 	/// </summary>
 	public bool? LoadFromCompilerCommandLines { get; set; }
 
@@ -88,7 +88,7 @@ public sealed class RoslynkSettings
 	public TimeSpan EffectiveEvictionCheckInterval =>
 		TimeSpan.FromMinutes(Math.Max(MinimumEvictionCheckMinutes, EvictionCheckMinutes ?? DefaultEvictionCheckMinutes));
 
-	/// <summary>Whether loads may use kept compiler command lines, as the engine's plain value; absent means they may.</summary>
+	/// <summary>Whether loads may use kept compiler command lines, as the engine's plain value; absent means they do not.</summary>
 	public CompilerCommandLineLoading EffectiveCompilerCommandLineLoading =>
 		new(LoadFromCompilerCommandLines ?? CompilerCommandLineLoading.Default.Enabled);
 

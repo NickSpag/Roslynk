@@ -106,15 +106,15 @@ public class RoslynkSettingsTests
 	}
 
 	[Fact]
-	public void WhenLoadFromCompilerCommandLinesIsAbsent_ThenLoadsMayUseThem()
+	public void WhenLoadFromCompilerCommandLinesIsAbsent_ThenLoadsDoNotUseThem()
 	{
-		Assert.True(Bind().EffectiveCompilerCommandLineLoading.Enabled);
+		Assert.False(Bind().EffectiveCompilerCommandLineLoading.Enabled);
 	}
 
 	[Fact]
-	public void WhenLoadFromCompilerCommandLinesIsFalse_ThenLoadsDoNotUseThem()
+	public void WhenLoadFromCompilerCommandLinesIsTrue_ThenLoadsUseThem()
 	{
-		Assert.False(Bind(("LoadFromCompilerCommandLines", "false")).EffectiveCompilerCommandLineLoading.Enabled);
+		Assert.True(Bind(("LoadFromCompilerCommandLines", "true")).EffectiveCompilerCommandLineLoading.Enabled);
 	}
 
 	[Fact]
