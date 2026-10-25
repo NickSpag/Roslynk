@@ -81,7 +81,7 @@ internal sealed class SharedScratch<TOwner>
 			string relative = Path.GetRelativePath(ScratchDirectory, file);
 			if (!File.Exists(Path.Combine(PristineDirectory, relative)))
 			{
-				File.Delete(file);
+				await DeleteRetryingAsync(file);
 				changed.Add(file);
 			}
 		}
@@ -138,6 +138,26 @@ internal sealed class SharedScratch<TOwner>
 					throw new InvalidOperationException(
 						$"Scratch reset left '{document.FilePath}' out of sync with the snapshot "
 						+ $"(disk {disk.Length} chars, snapshot {snapshot.Length} chars, first difference at {FirstDifference(disk, snapshot)}).");
+			}
+		}
+	}
+
+	/// <summary>
+	/// Deletes a file, retrying briefly: MSBuildWorkspace's design-time build, the watcher and the
+	/// previous test's compilation can still hold a handle on a file another class just wrote.
+	/// </summary>
+	private static async Task DeleteRetryingAsync(string path)
+	{
+		for (int attempt = 0; ; attempt++)
+		{
+			try
+			{
+				File.Delete(path);
+				return;
+			}
+			catch (IOException) when (attempt < 20)
+			{
+				await Task.Delay(50);
 			}
 		}
 	}
