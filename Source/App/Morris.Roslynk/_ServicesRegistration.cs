@@ -6,6 +6,7 @@ using Morris.Roslynk.Infrastructure.Observability;
 using Morris.Roslynk.Infrastructure.Outlines;
 using Morris.Roslynk.Infrastructure.Projections;
 using Morris.Roslynk.Infrastructure.Resolution;
+using Morris.Roslynk.Infrastructure.Workspaces;
 using Morris.Roslynk.Infrastructure.Writing;
 
 namespace Morris.Roslynk;
@@ -18,13 +19,22 @@ public static class ServicesRegistration
 	/// every tool result; hosts that read it from configuration pass it here (see the Roslynk MCP host's
 	/// ResponseBudgetConfiguration), otherwise the default applies. The optional
 	/// <paramref name="loadWaitTimeout"/> bounds how long solution-scoped tools wait for an in-flight initial
-	/// load; hosts read 'Roslynk:LoadWaitSeconds' and pass the plain value, otherwise 30 seconds applies.
+	/// load; hosts read 'Roslynk:LoadWaitSeconds' and pass the plain value, otherwise 30 seconds applies. The
+	/// optional <paramref name="compilerCommandLineLoading"/> says whether loads may use kept compiler command
+	/// lines; hosts read 'Roslynk:LoadFromCompilerCommandLines', otherwise they may.
 	/// </summary>
-	public static IServiceCollection AddRoslynk(this IServiceCollection services, ResponseBudget? responseBudget = null, LoadWaitTimeout? loadWaitTimeout = null)
+	public static IServiceCollection AddRoslynk(
+		this IServiceCollection services,
+		ResponseBudget? responseBudget = null,
+		LoadWaitTimeout? loadWaitTimeout = null,
+		CompilerCommandLineLoading? compilerCommandLineLoading = null)
 	{
 		services.AddSingleton(responseBudget ?? ResponseBudget.Default);
 		services.AddSingleton(loadWaitTimeout ?? LoadWaitTimeout.Default);
-		services.AddSingleton(provider => new InstanceRegistry(provider.GetRequiredService<LoadWaitTimeout>()));
+		services.AddSingleton(compilerCommandLineLoading ?? CompilerCommandLineLoading.Default);
+		services.AddSingleton(provider => new InstanceRegistry(
+			provider.GetRequiredService<LoadWaitTimeout>(),
+			provider.GetRequiredService<CompilerCommandLineLoading>()));
 		services.AddSingleton<DiagnosticsService>();
 		services.AddSingleton<SymbolResolver>();
 		services.AddSingleton<ProjectionService>();

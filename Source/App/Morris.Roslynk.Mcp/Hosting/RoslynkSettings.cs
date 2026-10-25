@@ -1,5 +1,6 @@
 using Morris.Roslynk.Infrastructure.Lifecycle;
 using Morris.Roslynk.Infrastructure.Outlines;
+using Morris.Roslynk.Infrastructure.Workspaces;
 
 namespace Morris.Roslynk.Mcp.Hosting;
 
@@ -33,6 +34,12 @@ public sealed class RoslynkSettings
 
 	/// <summary>Minutes between idle-eviction sweeps; absent means 5, floored at 1.</summary>
 	public double? EvictionCheckMinutes { get; set; }
+
+	/// <summary>
+	/// Whether a solution may be built from the compiler command lines its build kept, instead of loading through
+	/// MSBuild; absent means it may.
+	/// </summary>
+	public bool? LoadFromCompilerCommandLines { get; set; }
 
 	/// <summary>The loopback port the daemon listens on; absent means <see cref="LoopbackOnlyExtensions.DefaultPort"/>.</summary>
 	public int? Port { get; set; }
@@ -80,6 +87,10 @@ public sealed class RoslynkSettings
 	/// <summary>The configured eviction check interval, or 5 minutes when absent, floored at 1 minute.</summary>
 	public TimeSpan EffectiveEvictionCheckInterval =>
 		TimeSpan.FromMinutes(Math.Max(MinimumEvictionCheckMinutes, EvictionCheckMinutes ?? DefaultEvictionCheckMinutes));
+
+	/// <summary>Whether loads may use kept compiler command lines, as the engine's plain value; absent means they may.</summary>
+	public CompilerCommandLineLoading EffectiveCompilerCommandLineLoading =>
+		new(LoadFromCompilerCommandLines ?? CompilerCommandLineLoading.Default.Enabled);
 
 	/// <summary>The configured port, or 6502 when absent.</summary>
 	public int EffectivePort => Port ?? LoopbackOnlyExtensions.DefaultPort;

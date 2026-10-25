@@ -36,7 +36,8 @@ builder.AddRoslynkObservability();
 
 builder.Services.AddRoslynk(
 	new ResponseBudget(settings.EffectiveMaxChars),
-	settings.EffectiveLoadWaitTimeout);
+	settings.EffectiveLoadWaitTimeout,
+	settings.EffectiveCompilerCommandLineLoading);
 builder.Services.AddSingleton(settings);
 builder.Services.AddHostedService<IdleEvictionService>();
 

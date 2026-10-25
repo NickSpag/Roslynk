@@ -1,4 +1,5 @@
 using Microsoft.CodeAnalysis;
+using Morris.Roslynk.Infrastructure.Lifecycle;
 using Morris.Roslynk.Infrastructure.Workspaces;
 
 namespace Morris.Roslynk.Tests.Infrastructure.Workspaces.CompilerCommandLineLoadTests;
@@ -20,6 +21,29 @@ public class FallbackTests
 		Project app = Assert.Single(subject.Solution.Projects, p => p.Name == "App");
 		ProjectReference reference = Assert.Single(app.ProjectReferences);
 		Assert.Equal("Lib(net10.0)", subject.Solution.GetProject(reference.ProjectId)?.Name);
+	}
+
+	[Fact]
+	public async Task WhenLoadingFromCommandLinesIsTurnedOff_ThenTheRegistryLoadsThroughMSBuild()
+	{
+		string solutionPath = TestSolutions.CreateScratchLinkedSolution();
+		using var registry = new InstanceRegistry(compilerCommandLineLoading: new CompilerCommandLineLoading(false));
+
+		RoslynInstance instance = await registry.GetOrAddAsync(solutionPath);
+
+		Assert.False(instance.Workspace?.LoadedFromCompilerCommandLines);
+		Assert.Contains(instance.Workspace!.Solution.Projects, p => p.Name == "App");
+	}
+
+	[Fact]
+	public async Task WhenTheRegistryUsesTheDefault_ThenItLoadsFromKeptCommandLines()
+	{
+		string solutionPath = TestSolutions.CreateScratchLinkedSolution();
+		using var registry = new InstanceRegistry();
+
+		RoslynInstance instance = await registry.GetOrAddAsync(solutionPath);
+
+		Assert.True(instance.Workspace?.LoadedFromCompilerCommandLines);
 	}
 
 	[Fact]

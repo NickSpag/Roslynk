@@ -322,6 +322,7 @@ All `Roslynk:*` settings come from one typed object bound from the `Roslynk` sec
 | `Roslynk:LoadWaitSeconds` | 30 | How long solution-scoped tools wait server-side for an in-flight initial load before returning `error=Indexing`; `0` means do not wait. |
 | `Roslynk:IdleEvictionMinutes` | 30 | Minutes a solution may sit unused before the daemon evicts it; 0 disables eviction. |
 | `Roslynk:EvictionCheckMinutes` | 5 | Minutes between idle-eviction sweeps; floored at 1. |
+| `Roslynk:LoadFromCompilerCommandLines` | true | Build a solution from the compiler command lines its build kept, when every project has a current one ("Faster solution loads"); `false` always loads through MSBuild. |
 
 To change a setting, copy or rename `appsettings.json.example` to `appsettings.json` beside the executable and uncomment what you need, then restart the daemon. The loader accepts JavaScript/C#-style comments, but VS Code flags them as errors in `.json` files unless you associate the file with JSONC in your settings:
 
@@ -329,7 +330,7 @@ To change a setting, copy or rename `appsettings.json.example` to `appsettings.j
 "files.associations": { "appsettings*.json": "jsonc" }
 ```
 
-An `appsettings.json` beside the executable lives inside the tool's version directory (`~/.dotnet/tools/.store/roslynk/<version>/...`), so the next `dotnet tool update` extracts a fresh tool and silently loses your edit. For durable overrides use the equivalent environment variables, which the same configuration reads: `Roslynk__Port`, `Roslynk__MaxResponseChars`, `Roslynk__LoadWaitSeconds`, `Roslynk__IdleEvictionMinutes`, `Roslynk__EvictionCheckMinutes`.
+An `appsettings.json` beside the executable lives inside the tool's version directory (`~/.dotnet/tools/.store/roslynk/<version>/...`), so the next `dotnet tool update` extracts a fresh tool and silently loses your edit. For durable overrides use the equivalent environment variables, which the same configuration reads: `Roslynk__Port`, `Roslynk__MaxResponseChars`, `Roslynk__LoadWaitSeconds`, `Roslynk__IdleEvictionMinutes`, `Roslynk__EvictionCheckMinutes`, `Roslynk__LoadFromCompilerCommandLines`.
 
 A shared daemon serves every client with one set of values — set the smallest response cap your clients need.
 
@@ -361,7 +362,8 @@ the project file, the `Directory.*.props`/`.targets` above it or its `project.as
 must exist, and no C# file it does not list may have been added since. If any project fails that, or a project has
 none, the whole solution loads through MSBuild as before. Projects whose SDK compiles nothing (`Microsoft.Build.NoTargets`,
 `Microsoft.Build.Traversal`) are left out, and the solution is what the compiler saw: a generated file the design-time
-build leaves out (MVC's `MvcApplicationPartsAssemblyInfo.cs`) is included.
+build leaves out (MVC's `MvcApplicationPartsAssemblyInfo.cs`) is included. `Roslynk:LoadFromCompilerCommandLines=false`
+(`Roslynk__LoadFromCompilerCommandLines=false`) turns it off.
 
 ## Run (Windows)
 

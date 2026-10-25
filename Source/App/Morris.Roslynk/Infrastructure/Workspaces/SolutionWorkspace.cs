@@ -76,7 +76,8 @@ public sealed class SolutionWorkspace : IDisposable
 	public static async Task<SolutionWorkspace> LoadAsync(
 		string solutionPath,
 		IProgress<ProjectLoadProgress>? progress = null,
-		CancellationToken cancellationToken = default)
+		CancellationToken cancellationToken = default,
+		bool useCompilerCommandLines = true)
 	{
 		if (solutionPath is null)
 			throw new ArgumentNullException(nameof(solutionPath));
@@ -97,11 +98,11 @@ public sealed class SolutionWorkspace : IDisposable
 			// build would; loading from those files takes seconds where MSBuild takes about a quarter of a second
 			// per project. Anything they cannot describe loads through MSBuild as before.
 			var commandLineWorkspace = new AdhocWorkspace();
-			Solution? fromCommandLines;
-			string fallbackReason;
-			using (Activity? commandLineActivity = RoslynkActivitySource.Instance.StartActivity("compiler_command_line_load"))
+			Solution? fromCommandLines = null;
+			if (useCompilerCommandLines)
 			{
-				fromCommandLines = CompilerCommandLineLoad.TryLoad(commandLineWorkspace, solutionPath, out fallbackReason);
+				using Activity? commandLineActivity = RoslynkActivitySource.Instance.StartActivity("compiler_command_line_load");
+				fromCommandLines = CompilerCommandLineLoad.TryLoad(commandLineWorkspace, solutionPath, out string fallbackReason);
 				commandLineActivity?.SetTag("roslynk.load.fallback_reason", fallbackReason);
 			}
 
