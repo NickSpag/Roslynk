@@ -333,6 +333,36 @@ An `appsettings.json` beside the executable lives inside the tool's version dire
 
 A shared daemon serves every client with one set of values — set the smallest response cap your clients need.
 
+### Faster solution loads
+
+Opening a solution normally runs a design-time build of every project through MSBuild, which takes about a quarter
+of a second per project and runs again whenever a project or build file changes. A build can keep what that
+design-time build would find, the C# compiler's command line, beside each project's outputs. When every C# project
+of the solution has a current one, Roslynk builds the solution from those files instead, without MSBuild: on a
+133-project solution, `open_solution` was ready in 5.8s instead of 32s, with the same diagnostics, references and
+callers. Add this to a `Directory.Build.targets` that every project imports, then
+build (Debug):
+
+```xml
+<Project>
+  <PropertyGroup>
+    <ProvideCommandLineArgs>true</ProvideCommandLineArgs>
+  </PropertyGroup>
+  <Target Name="KeepCompilerCommandLine" AfterTargets="CoreCompile"
+          Condition="'$(DesignTimeBuild)' != 'true' and '@(CscCommandLineArgs)' != ''">
+    <WriteLinesToFile File="$(IntermediateOutputPath)$(MSBuildProjectFile).csc.rsp"
+                      Lines="@(CscCommandLineArgs)" Overwrite="true" />
+  </Target>
+</Project>
+```
+
+A file is used only while it still describes its project: it must not be older than the assembly compiled beside it,
+the project file, the `Directory.*.props`/`.targets` above it or its `project.assets.json`, every source file it lists
+must exist, and no C# file it does not list may have been added since. If any project fails that, or a project has
+none, the whole solution loads through MSBuild as before. Projects whose SDK compiles nothing (`Microsoft.Build.NoTargets`,
+`Microsoft.Build.Traversal`) are left out, and the solution is what the compiler saw: a generated file the design-time
+build leaves out (MVC's `MvcApplicationPartsAssemblyInfo.cs`) is included.
+
 ## Run (Windows)
 
 Foreground dev:

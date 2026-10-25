@@ -20,7 +20,7 @@ public sealed class SolutionWorkspace : IDisposable
 		new ShadowCopyingAnalyzerAssemblyLoader(
 			Path.Combine(Path.GetTempPath(), "Roslynk", "AnalyzerShadowCopy"));
 
-	private readonly MSBuildWorkspace Workspace;
+	private readonly Workspace Workspace;
 
 	public Solution Solution { get; }
 
@@ -48,11 +48,17 @@ public sealed class SolutionWorkspace : IDisposable
 	/// </summary>
 	public TrackedAnalyzers TrackedAnalyzers { get; }
 
+	/// <summary>
+	/// Whether the solution was built from the compiler command lines a build kept (<see cref="CompilerCommandLineLoad"/>)
+	/// rather than through MSBuild.
+	/// </summary>
+	public bool LoadedFromCompilerCommandLines { get; private init; }
+
 	/// <summary>The in-process Razor generation for this workspace's solution, for regenerating after edits.</summary>
 	public RazorGenerationState Razor { get; }
 
 	private SolutionWorkspace(
-		MSBuildWorkspace workspace,
+		Workspace workspace,
 		Solution solution,
 		IReadOnlyList<string> loadDiagnostics,
 		IReadOnlyList<string> loadWarnings,
@@ -86,6 +92,26 @@ public sealed class SolutionWorkspace : IDisposable
 			{
 				MsBuildRegistrar.EnsureRegistered();
 			}
+
+			// A build that kept each project's compiler command line has already worked out what a design-time
+			// build would; loading from those files takes seconds where MSBuild takes about a quarter of a second
+			// per project. Anything they cannot describe loads through MSBuild as before.
+			var commandLineWorkspace = new AdhocWorkspace();
+			Solution? fromCommandLines;
+			string fallbackReason;
+			using (Activity? commandLineActivity = RoslynkActivitySource.Instance.StartActivity("compiler_command_line_load"))
+			{
+				fromCommandLines = CompilerCommandLineLoad.TryLoad(commandLineWorkspace, solutionPath, out fallbackReason);
+				commandLineActivity?.SetTag("roslynk.load.fallback_reason", fallbackReason);
+			}
+
+			if (fromCommandLines is not null)
+			{
+				loadActivity?.SetTag(ActivityTags.ProjectCountTag, fromCommandLines.Projects.Count());
+				return await CompleteAsync(commandLineWorkspace, fromCommandLines, solutionPath, loadDiagnostics, [], loadedFromCompilerCommandLines: true, cancellationToken);
+			}
+
+			commandLineWorkspace.Dispose();
 
 			MSBuildWorkspace workspace = MSBuildWorkspace.Create();
 			Solution solution;
@@ -157,28 +183,47 @@ public sealed class SolutionWorkspace : IDisposable
 						loadDiagnostics.Add(failure);
 				}
 
-				// Shadow-copy remap MUST precede the Razor augmentation: AugmentAsync requests compilations,
-				// which run source generators and therefore load every analyzer reference. If the references
-				// still use MSBuildWorkspace's default loader at that point, the originals in bin/obj get
-				// memory-mapped and locked for the lifetime of the process.
-				TrackedAnalyzers trackedAnalyzers;
-				using (Activity? shadowActivity = RoslynkActivitySource.Instance.StartActivity("shadow_copy_analyzers"))
-				{
-					shadowActivity?.SetTag(ActivityTags.SolutionPathTag, ActivityTags.Truncate(solutionPath));
-					(solution, trackedAnalyzers) = UseShadowCopyAnalyzerLoaders(solution, loadDiagnostics);
-				}
-
-				var razor = new RazorGenerationState();
-				using (Activity? razorActivity = RoslynkActivitySource.Instance.StartActivity("razor_augment"))
-				{
-					razorActivity?.SetTag(ActivityTags.SolutionPathTag, ActivityTags.Truncate(solutionPath));
-					solution = await RazorDocumentGenerator.AugmentAsync(solution, razor, cancellationToken);
-				}
-
 				loadActivity?.SetTag(ActivityTags.ProjectCountTag, solution.Projects.Count());
-				return new SolutionWorkspace(workspace, solution, loadDiagnostics.ToArray(), loadWarnings, trackedAnalyzers, razor);
+				return await CompleteAsync(workspace, solution, solutionPath, loadDiagnostics, loadWarnings, loadedFromCompilerCommandLines: false, cancellationToken);
 			}
 		}
+	}
+
+	/// <summary>
+	/// What every load does once it has a solution: analyzer references moved to the shadow-copying loader, then
+	/// Razor's generated documents added.
+	/// </summary>
+	private static async Task<SolutionWorkspace> CompleteAsync(
+		Workspace workspace,
+		Solution solution,
+		string solutionPath,
+		ConcurrentBag<string> loadDiagnostics,
+		IReadOnlyList<string> loadWarnings,
+		bool loadedFromCompilerCommandLines,
+		CancellationToken cancellationToken)
+	{
+		// Shadow-copy remap MUST precede the Razor augmentation: AugmentAsync requests compilations,
+		// which run source generators and therefore load every analyzer reference. If the references
+		// still use MSBuildWorkspace's default loader at that point, the originals in bin/obj get
+		// memory-mapped and locked for the lifetime of the process.
+		TrackedAnalyzers trackedAnalyzers;
+		using (Activity? shadowActivity = RoslynkActivitySource.Instance.StartActivity("shadow_copy_analyzers"))
+		{
+			shadowActivity?.SetTag(ActivityTags.SolutionPathTag, ActivityTags.Truncate(solutionPath));
+			(solution, trackedAnalyzers) = UseShadowCopyAnalyzerLoaders(solution, loadDiagnostics);
+		}
+
+		var razor = new RazorGenerationState();
+		using (Activity? razorActivity = RoslynkActivitySource.Instance.StartActivity("razor_augment"))
+		{
+			razorActivity?.SetTag(ActivityTags.SolutionPathTag, ActivityTags.Truncate(solutionPath));
+			solution = await RazorDocumentGenerator.AugmentAsync(solution, razor, cancellationToken);
+		}
+
+		return new SolutionWorkspace(workspace, solution, loadDiagnostics.ToArray(), loadWarnings, trackedAnalyzers, razor)
+		{
+			LoadedFromCompilerCommandLines = loadedFromCompilerCommandLines,
+		};
 	}
 
 	private static (Solution Solution, TrackedAnalyzers Tracked) UseShadowCopyAnalyzerLoaders(Solution solution, ConcurrentBag<string> loadDiagnostics)

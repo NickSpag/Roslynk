@@ -265,6 +265,88 @@ internal static class TestSolutions
 	public static void BuildScratchGenerator(string solutionPath) =>
 		Build(Path.Combine(Path.GetDirectoryName(solutionPath)!, "GeneratorLib", "GeneratorLib.csproj"));
 
+	/// <summary>
+	/// The MSBuild target a build uses to keep each project's compiler command line, one argument per line, in
+	/// <c>obj/&lt;configuration&gt;/&lt;framework&gt;/&lt;project file&gt;.csc.rsp</c>, as
+	/// <see cref="Morris.Roslynk.Infrastructure.Workspaces.CompilerCommandLineLoad"/> reads it.
+	/// </summary>
+	public const string KeepCompilerCommandLineTargets = """
+		<Project>
+		  <PropertyGroup>
+		    <ProvideCommandLineArgs>true</ProvideCommandLineArgs>
+		  </PropertyGroup>
+		  <Target Name="KeepCompilerCommandLine" AfterTargets="CoreCompile"
+		          Condition="'$(DesignTimeBuild)' != 'true' and '@(CscCommandLineArgs)' != ''">
+		    <WriteLinesToFile File="$(IntermediateOutputPath)$(MSBuildProjectFile).csc.rsp"
+		                      Lines="@(CscCommandLineArgs)" Overwrite="true" />
+		  </Target>
+		</Project>
+		""";
+
+	/// <summary>
+	/// A scratch copy of a fixture built (Debug) with <see cref="KeepCompilerCommandLineTargets"/> as its
+	/// Directory.Build.targets, so every project has a current kept command line.
+	/// </summary>
+	public static string CreateScratchBuiltWithCompilerCommandLines(string fixtureName, string solutionFile)
+	{
+		string path = CreateScratch(fixtureName, solutionFile);
+		BuildKeepingCompilerCommandLines(path);
+		return path;
+	}
+
+	/// <summary>
+	/// Builds (Debug) a solution with <see cref="KeepCompilerCommandLineTargets"/> as the Directory.Build.targets
+	/// beside it.
+	/// </summary>
+	public static void BuildKeepingCompilerCommandLines(string solutionPath)
+	{
+		File.WriteAllText(Path.Combine(Path.GetDirectoryName(solutionPath)!, "Directory.Build.targets"), KeepCompilerCommandLineTargets);
+		Build(solutionPath);
+	}
+
+	/// <summary>
+	/// A two-project solution written to a fresh temp directory and built keeping each compiler command line: Lib
+	/// targets net8.0 and net10.0, and App (net10.0) references it.
+	/// </summary>
+	public static string CreateScratchLinkedSolution()
+	{
+		string root = Path.Combine(Path.GetTempPath(), "roslynk-tests", Guid.NewGuid().ToString("N"), "LinkedSolution");
+		void Write(string relative, string text)
+		{
+			string path = Path.Combine(root, relative);
+			Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+			File.WriteAllText(path, text);
+		}
+
+		Write("Lib/Lib.csproj", """
+			<Project Sdk="Microsoft.NET.Sdk">
+			  <PropertyGroup>
+			    <TargetFrameworks>net8.0;net10.0</TargetFrameworks>
+			    <Nullable>enable</Nullable>
+			    <RootNamespace>Linked.Library</RootNamespace>
+			  </PropertyGroup>
+			</Project>
+			""");
+		Write("Lib/Greeter.cs", "namespace Linked.Library;\n\npublic static class Greeter\n{\n\tpublic static string Greet(string name) => $\"Hello, {name}\";\n}\n");
+		Write("App/App.csproj", """
+			<Project Sdk="Microsoft.NET.Sdk">
+			  <PropertyGroup>
+			    <TargetFramework>net10.0</TargetFramework>
+			    <OutputType>Exe</OutputType>
+			    <ImplicitUsings>enable</ImplicitUsings>
+			  </PropertyGroup>
+			  <ItemGroup><ProjectReference Include="../Lib/Lib.csproj" /></ItemGroup>
+			</Project>
+			""");
+		Write("App/Program.cs", "Console.WriteLine(Linked.Library.Greeter.Greet(\"world\"));\n");
+		Write("LinkedSolution.slnx", "<Solution>\n  <Project Path=\"App/App.csproj\" />\n  <Project Path=\"Lib/Lib.csproj\" />\n</Solution>\n");
+
+		string solutionPath = Path.Combine(root, "LinkedSolution.slnx");
+		Restore(solutionPath);
+		BuildKeepingCompilerCommandLines(solutionPath);
+		return solutionPath;
+	}
+
 	private static string CreateScratch(string fixtureName, string solutionFile)
 	{
 		string sourceDir = Path.Combine(FindTestFixturesRoot(), fixtureName);
