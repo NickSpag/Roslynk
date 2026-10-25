@@ -164,7 +164,9 @@ internal static class TestSolutions
 		throw new DirectoryNotFoundException("Could not locate the TestFixtures folder above the test assembly.");
 	}
 
-	private static void Restore(string solutionPath) => RunDotnet("restore", solutionPath);
+	// One project at a time: a parallel restore of a solution whose projects reference each other can write the same
+	// project's restore files twice and fail with "already exists", which happens under load.
+	private static void Restore(string solutionPath) => RunDotnet("restore --disable-parallel", solutionPath);
 
 	private static void Build(string projectPath) => RunDotnet("build", projectPath);
 
