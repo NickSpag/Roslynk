@@ -25,6 +25,12 @@ for k,v in sorted(last.items()):
 PY
   $T/dotnet-gcdump collect -p $P -o "$OUT/$name.gcdump" > /dev/null 2>&1
   echo "   after the dump's collection: process $(own_rss $P) GB" | tee -a "$OUT/summary"
+  # The dump's full collection is now the last one, so the GC's heap size is the live heap.
+  $T/dotnet-counters collect -p $P --counters System.Runtime --format json -o "$OUT/$name.after.json" --duration 00:00:03 > /dev/null 2>&1
+  python3 -c "
+import json,sys
+d=json.load(open(sys.argv[1])); last={e['name']:e['value'] for e in d.get('Events',[])}
+print('   after the dump, live heap %.2f GB, committed %.2f GB, fragmentation %.2f GB' % tuple(last.get(k,0)/2**30 for k in ('dotnet.gc.last_collection.heap.size (By)','dotnet.gc.last_collection.memory.committed_size (By)','dotnet.gc.last_collection.heap.fragmentation.size (By)')))" "$OUT/$name.after.json" | tee -a "$OUT/summary"
   $T/dotnet-gcdump report "$OUT/$name.gcdump" 2>/dev/null | head -30 > "$OUT/$name.top"
   head -4 "$OUT/$name.top" | tee -a "$OUT/summary"
 }

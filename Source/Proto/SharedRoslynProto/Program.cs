@@ -15,10 +15,26 @@ builder.WebHost.ConfigureKestrel(o => o.ListenLocalhost(port));
 builder.Services.AddRoslynk();
 builder.Services.AddMcpServer(o => o.ServerInfo = new() { Name = "Roslynk", Version = "proto" }).WithHttpTransport().WithRoslynkTools();
 builder.Services.AddSingleton(new GraphOptions(solutionPath, outputPath));
-builder.Services.AddHostedService<GraphService>();
+if (args.Length < 4 || args[3] != "nograph") builder.Services.AddHostedService<GraphService>();
 WebApplication app = builder.Build();
 app.MapMcp();
 app.MapGet("/version", () => "proto");
+// Memory as the GC sees it: before and after a full compacting collection that also returns free memory to the OS.
+app.MapGet("/gc", () =>
+{
+	static object Now()
+	{
+		var info = GC.GetGCMemoryInfo(GCKind.Any);
+		using var self = Process.GetCurrentProcess();
+		return new { liveOrHeapGB = GC.GetTotalMemory(false) / 1e9 * 1e9 / (1L << 30), heapSizeGB = info.HeapSizeBytes / (double)(1L << 30), committedGB = info.TotalCommittedBytes / (double)(1L << 30), fragmentedGB = info.FragmentedBytes / (double)(1L << 30), rssGB = self.WorkingSet64 / (double)(1L << 30) };
+	}
+	var before = Now();
+	System.Runtime.GCSettings.LargeObjectHeapCompactionMode = System.Runtime.GCLargeObjectHeapCompactionMode.CompactOnce;
+	GC.Collect(2, GCCollectionMode.Aggressive, blocking: true, compacting: true);
+	GC.WaitForPendingFinalizers();
+	GC.Collect(2, GCCollectionMode.Aggressive, blocking: true, compacting: true);
+	return new { before, after = Now() };
+});
 app.Run();
 
 sealed record GraphOptions(string SolutionPath, string OutputPath);
