@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+	<!-- WI-1 prototype (corral-ai docs/plans/control-room/2026-10-25-shared-roslyn-process.md): Roslynk's
+	     engine and the change graph analyzer in one process. Not shipped. -->
+	<PropertyGroup>
+		<TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+		<NoWarn>$(NoWarn);CS1591;CS8618</NoWarn>
+		<ServerGarbageCollection>true</ServerGarbageCollection>
+		<CorralRoot Condition="'$(CorralRoot)' == ''">/workspaces/corral-ai</CorralRoot>
+	</PropertyGroup>
+	<ItemGroup>
+		<ProjectReference Include="..\..\App\Morris.Roslynk\Morris.Roslynk.csproj" />
+		<PackageReference Include="ModelContextProtocol.AspNetCore" />
+		<PackageReference Include="Microsoft.Build.Framework" ExcludeAssets="runtime" PrivateAssets="all" />
+		<PackageReference Include="Microsoft.NET.StringTools" ExcludeAssets="runtime" PrivateAssets="all" />
+		<Compile Include="$(CorralRoot)/tools/Corral.Tools.Analyzer/SymbolGraph/*.cs" Link="Analyzer/%(Filename)%(Extension)" />
+		<AssemblyMetadata Include="CorralAnalyzerKey" Value="proto" />
+	</ItemGroup>
+</Project>

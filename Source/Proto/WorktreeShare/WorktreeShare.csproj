@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+	<!-- WI-2 prototype (corral-ai docs/plans/control-room/2026-10-25-shared-roslyn-process.md): two worktrees
+	     as versions of one solution under a placeholder root, against two separate solutions. Not shipped. -->
+	<PropertyGroup>
+		<OutputType>Exe</OutputType>
+		<TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+		<ServerGarbageCollection>true</ServerGarbageCollection>
+	</PropertyGroup>
+	<ItemGroup>
+		<PackageReference Include="Microsoft.CodeAnalysis.CSharp.Workspaces" />
+	</ItemGroup>
+</Project>
