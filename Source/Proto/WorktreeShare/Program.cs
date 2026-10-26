@@ -31,34 +31,28 @@ var shared = new Shared(analyzerLoader);
 
 Solution solutionA, solutionB;
 var leaks = new Leaks();
-if (mode == "separate")
-{
-    var a = Loader.Load(rootA, rootA, shared, leaks);
-    var b = Loader.Load(rootB, rootB, shared, leaks);
-    solutionA = new AdhocWorkspace().AddSolution(a.Solution);
-    solutionB = new AdhocWorkspace().AddSolution(b.Solution);
-    report["projects"] = a.Projects.Count;
-    report["fromMSBuildOnly"] = a.Skipped;
-}
-else
-{
-    var a = Loader.Load(rootA, Placeholder, shared, leaks);
-    solutionA = workspace.AddSolution(a.Solution);
-    report["projects"] = a.Projects.Count;
-    report["fromMSBuildOnly"] = a.Skipped;
-    if (mode == "load") solutionB = solutionA;
-    else
-    {
-        var b = Loader.Load(rootB, Placeholder, shared, leaks);
-        (solutionB, var swapped) = await Versioning.AsVersionOf(solutionA, a, b);
-        report["swapped"] = swapped;
-    }
-}
+// A is loaded and compiled before B exists: a forked snapshot shares only the compilation trackers its base had
+// already created (Roslyn creates them on first use), so forking an uncompiled A shares nothing.
+var a = Loader.Load(rootA, mode == "separate" ? rootA : Placeholder, shared, leaks);
+solutionA = (mode == "separate" ? new AdhocWorkspace() : workspace).AddSolution(a.Solution);
+report["projects"] = a.Projects.Count;
+report["fromMSBuildOnly"] = a.Skipped;
 Log($"loaded: {solutionA.ProjectIds.Count} projects");
 report["loadSeconds"] = stopwatch.Elapsed.TotalSeconds;
-
 var compsA = await Compile.AllAsync(solutionA, Log, "A");
 report["afterA"] = Memory.Snapshot();
+if (mode == "separate")
+{
+    var b = Loader.Load(rootB, rootB, shared, leaks);
+    solutionB = new AdhocWorkspace().AddSolution(b.Solution);
+}
+else if (mode == "load") solutionB = solutionA;
+else
+{
+    var b = Loader.Load(rootB, Placeholder, shared, leaks);
+    (solutionB, var swapped) = await Versioning.AsVersionOf(solutionA, a, b);
+    report["swapped"] = swapped;
+}
 var compsB = mode == "load" ? compsA : await Compile.AllAsync(solutionB, Log, "B");
 report["afterB"] = Memory.Snapshot();
 report["compileSeconds"] = stopwatch.Elapsed.TotalSeconds;
@@ -116,7 +110,9 @@ static class Compile
         {
             var c = await p.GetCompilationAsync(ct);
             if (c is null) return;
-            Interlocked.Add(ref errors, c.GetDiagnostics(ct).Count(d => d.Severity == DiagnosticSeverity.Error && d.Id != "CS0436"));
+            var errs = c.GetDiagnostics(ct).Where(d => d.Severity == DiagnosticSeverity.Error && d.Id != "CS0436").ToList();
+            Interlocked.Add(ref errors, errs.Count);
+            foreach (var e in errs.Take(3)) log($"  {label} {p.Name}: {e.Id} {e.GetMessage()} at {e.Location.GetLineSpan()}");
             result[p.Id] = c;
         });
         log($"{label}: compiled {result.Count} projects, {errors} errors");
@@ -221,9 +217,9 @@ static class Loader
             DocumentInfo Doc(string mapped, Func<string, string>? rewrite = null) =>
                 DocumentInfo.Create(DocumentId.CreateFromSerialized(p.Id, Guid(mapped + "|" + p.Framework), mapped), Path.GetFileName(mapped),
                     loader: new RealFileLoader(Unmap(mapped), rewrite), filePath: mapped);
-            var documents = a.SourceFiles.Select(s => Doc(Path.GetFullPath(s.Path))).ToList();
-            var additional = a.AdditionalFiles.Select(s => Doc(Path.GetFullPath(s.Path))).ToList();
-            var configs = a.AnalyzerConfigPaths.Select(c => Doc(Path.GetFullPath(c), text =>
+            var documents = a.SourceFiles.Select(s => Path.GetFullPath(s.Path)).Distinct().Select(f => Doc(f)).ToList();
+            var additional = a.AdditionalFiles.Select(s => Path.GetFullPath(s.Path)).Distinct().Select(f => Doc(f)).ToList();
+            var configs = a.AnalyzerConfigPaths.Select(c => Path.GetFullPath(c)).Distinct().Select(c => Doc(c, text =>
             {
                 if (root != mappedRoot && text.Contains(root + "/", StringComparison.Ordinal))
                 {
@@ -292,6 +288,8 @@ static class Versioning
     {
         var s = a;
         var swapped = new List<string>();
+        var sameOnceMapped = 0;
+        var infosA = la.Projects.Values.SelectMany(p => p.Info.Documents.Concat(p.Info.AdditionalDocuments).Concat(p.Info.AnalyzerConfigDocuments)).ToDictionary(d => d.Id);
         var rebuilt = new List<string>();
         foreach (var (id, (rspB, infoB)) in lb.Projects)
         {
@@ -313,7 +311,10 @@ static class Versioning
                 var realA = la.Root + d.FilePath![la.MappedRoot.Length..];
                 var realB = lb.Root + d.FilePath![lb.MappedRoot.Length..];
                 if (!File.Exists(realA) || !File.Exists(realB) || File.ReadAllBytes(realA).AsSpan().SequenceEqual(File.ReadAllBytes(realB))) continue;
+                // Files that differ only in the worktree root (the generated .editorconfig) are the same once mapped.
                 var text = (await d.TextLoader!.LoadTextAndVersionAsync(new LoadTextOptions(SourceHashAlgorithm.Sha256), default)).Text;
+                var docA = infosA.TryGetValue(d.Id, out var da) ? da : null;
+                if (docA is not null && (await docA.TextLoader!.LoadTextAndVersionAsync(new LoadTextOptions(SourceHashAlgorithm.Sha256), default)).Text.ContentEquals(text)) { sameOnceMapped++; continue; }
                 if (s.GetDocument(d.Id) is not null) s = s.WithDocumentText(d.Id, text);
                 else if (s.GetAdditionalDocument(d.Id) is not null) s = s.WithAdditionalDocumentText(d.Id, text);
                 else if (s.GetAnalyzerConfigDocument(d.Id) is not null) s = s.WithAnalyzerConfigDocumentText(d.Id, text);
@@ -321,6 +322,6 @@ static class Versioning
             }
         }
         foreach (var id in la.Projects.Keys.Where(k => !lb.Projects.ContainsKey(k))) { s = s.RemoveProject(id); rebuilt.Add(id + " (removed)"); }
-        return (s, new { documents = swapped.Distinct().Order().ToList(), projectsRebuilt = rebuilt });
+        return (s, new { documents = swapped.Distinct().Order().ToList(), projectsRebuilt = rebuilt, filesDifferingOnlyInTheRoot = sameOnceMapped });
     }
 }
