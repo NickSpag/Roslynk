@@ -53,6 +53,8 @@ print(f"open_solution\t{time.time()-t0:.1f}s", flush=True)
 with open(os.path.join(out, "open_solution.txt"), "w") as f: f.write(opened)
 sid = re.search(r"solutionId=(\S+)", opened).group(1)
 steps = sys.argv[4].split(",") if len(sys.argv) > 4 else ["diag", "refs", "callers"]
+if "diagc" in steps:
+    paged("get_diagnostics", {"solutionId": sid, "includeErrors": True, "includeWarnings": True, "includeAnalyzers": False}, "diagnostics-compiler")
 if "diag" in steps:
     paged("get_diagnostics", {"solutionId": sid, "includeErrors": True, "includeWarnings": True}, "diagnostics")
 for sym, label in [("Corral.Core.Jobs.JobModel.From", "JobModel.From"), ("Corral.Core.Jobs.JobModel", "JobModel")]:
