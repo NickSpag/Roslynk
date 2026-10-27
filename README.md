@@ -333,38 +333,6 @@ An `appsettings.json` beside the executable lives inside the tool's version dire
 
 A shared daemon serves every client with one set of values — set the smallest response cap your clients need.
 
-### Faster solution loads
-
-Opening a solution runs a design-time build of every project through MSBuild, which takes about a quarter of a second
-per project. Roslynk keeps what that build works out, each project's C# compiler arguments, and the next time it opens
-the same solution it builds the projects from those arguments instead, without MSBuild, as long as nothing they came
-from has changed. There is nothing to set up or add to the solution. On a 133-project solution, a load took 1.3s
-from the cache against 25s through MSBuild.
-
-The arguments are captured during the load Roslynk runs anyway: MSBuild writes a binary log of that design-time
-build to a temporary file, which holds each project's compiler arguments (a design-time build hands them to the
-compiler task without compiling), and Roslynk reads it and deletes it at once. Nothing needs to be built, and nothing
-is added to the build.
-
-The cache lives in your local application data folder (`Roslynk/CompilerArguments`), one entry per solution path, so
-worktrees do not share entries; an entry unused for 30 days is deleted. The next load goes through MSBuild, and
-captures again, when any of these changed since the capture:
-
-- the solution file, a project file, a `Directory.Build.props`/`.targets`, `Directory.Packages.props` or
-  `global.json` above a project (including one added where there was none), or a file they `<Import>`;
-- a project's restore output (`project.assets.json`, NuGet's generated `.props`/`.targets`);
-- which source files exist in a project's folder (a `.cs` file, an `.editorconfig`, or a file of a kind it lists as
-  an additional file, such as `.razor`, added or deleted), or whether a file it lists exists;
-- an environment variable those files, the packages' build files they import, or the SDK's own files mention, set or
-  not, or one that steers MSBuild, SDK selection or restore;
-- the installed .NET SDKs, or the version of Roslynk.
-
-Editing a source file, including a `#define` in it, does not invalidate the cache. A load is cached only when the
-solution rebuilt from its arguments matches what MSBuild loaded, fact for fact. A solution loads through MSBuild each
-time when Roslynk cannot tell what its build depends on: an `<Import>` in its own build files whose path depends on a
-property, one of those files reading files (`ReadLinesFromFile`, `XmlPeek`, `JsonPeek`, `System.IO.File`), a VB or F#
-project, or a build input that changed while the solution was loading.
-
 ## Run (Windows)
 
 Foreground dev:
