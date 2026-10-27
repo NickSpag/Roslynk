@@ -164,7 +164,9 @@ internal static class TestSolutions
 		throw new DirectoryNotFoundException("Could not locate the TestFixtures folder above the test assembly.");
 	}
 
-	private static void Restore(string solutionPath) => RunDotnet("restore", solutionPath);
+	// One project at a time: a parallel restore of a solution whose projects reference each other can write the same
+	// project's restore files twice and fail with "already exists", which happens under load.
+	private static void Restore(string solutionPath) => RunDotnet("restore --disable-parallel", solutionPath);
 
 	private static void Build(string projectPath) => RunDotnet("build", projectPath);
 
@@ -264,6 +266,68 @@ internal static class TestSolutions
 	/// <summary>Builds (Debug) the generator project of a GeneratorSolution scratch copy, as a user would after load.</summary>
 	public static void BuildScratchGenerator(string solutionPath) =>
 		Build(Path.Combine(Path.GetDirectoryName(solutionPath)!, "GeneratorLib", "GeneratorLib.csproj"));
+
+	/// <summary>A scratch copy of a fixture, restored and not built, at <paramref name="solutionFile"/> within it.</summary>
+	public static string CreateScratchFixture(string fixtureName, string solutionFile) => CreateScratch(fixtureName, solutionFile);
+
+	/// <summary>
+	/// A two-project solution written to a fresh temp directory and restored, not built: Lib targets net8.0 and
+	/// net10.0, with RootNamespace Linked.Library, and App (net10.0) references it and compiles Shared/Shared.cs,
+	/// outside its folder, linked as Common/Shared.cs. With
+	/// <paramref name="withNoTargetsProject"/>, a third project uses the Microsoft.Build.NoTargets SDK, which compiles
+	/// nothing.
+	/// </summary>
+	public static string CreateScratchLinkedSolution(bool withNoTargetsProject = false)
+	{
+		string root = Path.Combine(Path.GetTempPath(), "roslynk-tests", Guid.NewGuid().ToString("N"), "LinkedSolution");
+		void Write(string relative, string text)
+		{
+			string path = Path.Combine(root, relative);
+			Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+			File.WriteAllText(path, text);
+		}
+
+		Write("Lib/Lib.csproj", """
+			<Project Sdk="Microsoft.NET.Sdk">
+			  <PropertyGroup>
+			    <TargetFrameworks>net8.0;net10.0</TargetFrameworks>
+			    <Nullable>enable</Nullable>
+			    <RootNamespace>Linked.Library</RootNamespace>
+			  </PropertyGroup>
+			</Project>
+			""");
+		Write("Lib/Greeter.cs", "namespace Linked.Library;\n\npublic static class Greeter\n{\n\tpublic static string Greet(string name) => $\"Hello, {name}\";\n}\n");
+		Write("App/App.csproj", """
+			<Project Sdk="Microsoft.NET.Sdk">
+			  <PropertyGroup>
+			    <TargetFramework>net10.0</TargetFramework>
+			    <OutputType>Exe</OutputType>
+			    <ImplicitUsings>enable</ImplicitUsings>
+			  </PropertyGroup>
+			  <ItemGroup>
+			    <ProjectReference Include="../Lib/Lib.csproj" />
+			    <Compile Include="../Shared/Shared.cs" Link="Common/Shared.cs" />
+			  </ItemGroup>
+			</Project>
+			""");
+		Write("Shared/Shared.cs", "namespace Linked;\n\ninternal static class Shared;\n");
+		Write("App/Program.cs", "Console.WriteLine(Linked.Library.Greeter.Greet(\"world\"));\n");
+		Write("LinkedSolution.slnx", "<Solution>\n  <Project Path=\"App/App.csproj\" />\n  <Project Path=\"Lib/Lib.csproj\" />\n</Solution>\n");
+
+		if (withNoTargetsProject)
+		{
+			Write("Tools/Tools.csproj", """
+				<Project Sdk="Microsoft.Build.NoTargets/3.7.0">
+				  <PropertyGroup><TargetFramework>netstandard2.0</TargetFramework></PropertyGroup>
+				</Project>
+				""");
+			Write("LinkedSolution.slnx", "<Solution>\n  <Project Path=\"App/App.csproj\" />\n  <Project Path=\"Lib/Lib.csproj\" />\n  <Project Path=\"Tools/Tools.csproj\" />\n</Solution>\n");
+		}
+
+		string solutionPath = Path.Combine(root, "LinkedSolution.slnx");
+		Restore(solutionPath);
+		return solutionPath;
+	}
 
 	private static string CreateScratch(string fixtureName, string solutionFile)
 	{

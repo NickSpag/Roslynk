@@ -20,7 +20,7 @@ public sealed class SolutionWorkspace : IDisposable
 		new ShadowCopyingAnalyzerAssemblyLoader(
 			Path.Combine(Path.GetTempPath(), "Roslynk", "AnalyzerShadowCopy"));
 
-	private readonly MSBuildWorkspace Workspace;
+	private readonly Workspace Workspace;
 
 	public Solution Solution { get; }
 
@@ -48,11 +48,20 @@ public sealed class SolutionWorkspace : IDisposable
 	/// </summary>
 	public TrackedAnalyzers TrackedAnalyzers { get; }
 
+	/// <summary>
+	/// Whether the solution was rebuilt from compiler arguments an earlier load captured (<see cref="CompilerArgumentCache"/>)
+	/// rather than loaded through MSBuild.
+	/// </summary>
+	public bool LoadedFromCache { get; private init; }
+
+	/// <summary>Why a load did not use or did not fill the compiler argument cache, on its trace span.</summary>
+	private const string ReasonTag = "roslynk.load.cache_reason";
+
 	/// <summary>The in-process Razor generation for this workspace's solution, for regenerating after edits.</summary>
 	public RazorGenerationState Razor { get; }
 
 	private SolutionWorkspace(
-		MSBuildWorkspace workspace,
+		Workspace workspace,
 		Solution solution,
 		IReadOnlyList<string> loadDiagnostics,
 		IReadOnlyList<string> loadWarnings,
@@ -67,8 +76,15 @@ public sealed class SolutionWorkspace : IDisposable
 		Razor = razor;
 	}
 
-	public static async Task<SolutionWorkspace> LoadAsync(
+	public static Task<SolutionWorkspace> LoadAsync(
 		string solutionPath,
+		IProgress<ProjectLoadProgress>? progress = null,
+		CancellationToken cancellationToken = default) =>
+		LoadAsync(solutionPath, CompilerArgumentCache.Default, progress, cancellationToken);
+
+	internal static async Task<SolutionWorkspace> LoadAsync(
+		string solutionPath,
+		CompilerArgumentCache cache,
 		IProgress<ProjectLoadProgress>? progress = null,
 		CancellationToken cancellationToken = default)
 	{
@@ -86,6 +102,31 @@ public sealed class SolutionWorkspace : IDisposable
 			{
 				MsBuildRegistrar.EnsureRegistered();
 			}
+
+			// A design-time build of every project takes about a quarter of a second each; an earlier load's compiler
+			// arguments rebuild the solution in a fraction of that while nothing they came from has changed.
+			var cachedWorkspace = new AdhocWorkspace();
+			CachedLoad? cached;
+			using (Activity? cacheActivity = RoslynkActivitySource.Instance.StartActivity("compiler_argument_cache_load"))
+			{
+				cached = cache.TryLoad(cachedWorkspace, solutionPath, out string reason);
+				cacheActivity?.SetTag(ReasonTag, reason);
+			}
+
+			if (cached is not null)
+			{
+				foreach (string diagnostic in cached.LoadDiagnostics)
+					loadDiagnostics.Add(diagnostic);
+
+				loadActivity?.SetTag(ActivityTags.ProjectCountTag, cached.Solution.Projects.Count());
+				return await CompleteAsync(cachedWorkspace, cached.Solution, solutionPath, loadDiagnostics, cached.LoadWarnings, loadedFromCache: true, cancellationToken);
+			}
+
+			cachedWorkspace.Dispose();
+
+			using CompilerArgumentCapture? capture = cache.BeginCapture(solutionPath, out string captureReason);
+			loadActivity?.SetTag(ReasonTag, captureReason);
+			DateTime loadStartedUtc = DateTime.UtcNow;
 
 			MSBuildWorkspace workspace = MSBuildWorkspace.Create();
 			Solution solution;
@@ -129,7 +170,10 @@ public sealed class SolutionWorkspace : IDisposable
 						progress?.Report(p);
 					});
 
-					solution = await workspace.OpenSolutionAsync(solutionPath, trackingProgress, cancellationToken);
+					// With a capture, the design-time build is also logged, for the cache to read the compiler arguments from.
+					solution = capture is null
+						? await workspace.OpenSolutionAsync(solutionPath, trackingProgress, cancellationToken)
+						: await capture.OpenSolutionAsync(workspace, solutionPath, trackingProgress, cancellationToken);
 
 					foreach (Activity a in projectSpans.Values)
 					{
@@ -157,28 +201,54 @@ public sealed class SolutionWorkspace : IDisposable
 						loadDiagnostics.Add(failure);
 				}
 
-				// Shadow-copy remap MUST precede the Razor augmentation: AugmentAsync requests compilations,
-				// which run source generators and therefore load every analyzer reference. If the references
-				// still use MSBuildWorkspace's default loader at that point, the originals in bin/obj get
-				// memory-mapped and locked for the lifetime of the process.
-				TrackedAnalyzers trackedAnalyzers;
-				using (Activity? shadowActivity = RoslynkActivitySource.Instance.StartActivity("shadow_copy_analyzers"))
+				if (capture is not null)
 				{
-					shadowActivity?.SetTag(ActivityTags.SolutionPathTag, solutionPath);
-					(solution, trackedAnalyzers) = UseShadowCopyAnalyzerLoaders(solution, loadDiagnostics);
-				}
-
-				var razor = new RazorGenerationState();
-				using (Activity? razorActivity = RoslynkActivitySource.Instance.StartActivity("razor_augment"))
-				{
-					razorActivity?.SetTag(ActivityTags.SolutionPathTag, solutionPath);
-					solution = await RazorDocumentGenerator.AugmentAsync(solution, razor, cancellationToken);
+					using Activity? storeActivity = RoslynkActivitySource.Instance.StartActivity("compiler_argument_cache_store");
+					string? notStored = cache.Store(capture, solutionPath, solution, [.. loadDiagnostics], loadWarnings, loadStartedUtc);
+					storeActivity?.SetTag(ReasonTag, notStored ?? "");
 				}
 
 				loadActivity?.SetTag(ActivityTags.ProjectCountTag, solution.Projects.Count());
-				return new SolutionWorkspace(workspace, solution, loadDiagnostics.ToArray(), loadWarnings, trackedAnalyzers, razor);
+				return await CompleteAsync(workspace, solution, solutionPath, loadDiagnostics, loadWarnings, loadedFromCache: false, cancellationToken);
 			}
 		}
+	}
+
+	/// <summary>
+	/// What every load does once it has a solution: analyzer references moved to the shadow-copying loader, then
+	/// Razor's generated documents added.
+	/// </summary>
+	private static async Task<SolutionWorkspace> CompleteAsync(
+		Workspace workspace,
+		Solution solution,
+		string solutionPath,
+		ConcurrentBag<string> loadDiagnostics,
+		IReadOnlyList<string> loadWarnings,
+		bool loadedFromCache,
+		CancellationToken cancellationToken)
+	{
+		// Shadow-copy remap MUST precede the Razor augmentation: AugmentAsync requests compilations,
+		// which run source generators and therefore load every analyzer reference. If the references
+		// still use MSBuildWorkspace's default loader at that point, the originals in bin/obj get
+		// memory-mapped and locked for the lifetime of the process.
+		TrackedAnalyzers trackedAnalyzers;
+		using (Activity? shadowActivity = RoslynkActivitySource.Instance.StartActivity("shadow_copy_analyzers"))
+		{
+			shadowActivity?.SetTag(ActivityTags.SolutionPathTag, solutionPath);
+			(solution, trackedAnalyzers) = UseShadowCopyAnalyzerLoaders(solution, loadDiagnostics);
+		}
+
+		var razor = new RazorGenerationState();
+		using (Activity? razorActivity = RoslynkActivitySource.Instance.StartActivity("razor_augment"))
+		{
+			razorActivity?.SetTag(ActivityTags.SolutionPathTag, solutionPath);
+			solution = await RazorDocumentGenerator.AugmentAsync(solution, razor, cancellationToken);
+		}
+
+		return new SolutionWorkspace(workspace, solution, loadDiagnostics.ToArray(), loadWarnings, trackedAnalyzers, razor)
+		{
+			LoadedFromCache = loadedFromCache,
+		};
 	}
 
 	private static (Solution Solution, TrackedAnalyzers Tracked) UseShadowCopyAnalyzerLoaders(Solution solution, ConcurrentBag<string> loadDiagnostics)

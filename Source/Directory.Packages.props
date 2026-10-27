@@ -5,6 +5,7 @@
   <ItemGroup>
     <!-- Roslyn / MSBuild -->
     <PackageVersion Include="Microsoft.Build.Locator" Version="1.11.2" />
+    <PackageVersion Include="Microsoft.Build" Version="18.9.6" />
     <PackageVersion Include="Microsoft.Build.Framework" Version="18.9.6" />
     <PackageVersion Include="Microsoft.NET.StringTools" Version="18.9.6" />
     <PackageVersion Include="Microsoft.CodeAnalysis.CSharp.Workspaces" Version="5.9.0" />
