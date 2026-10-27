@@ -322,7 +322,6 @@ All `Roslynk:*` settings come from one typed object bound from the `Roslynk` sec
 | `Roslynk:LoadWaitSeconds` | 30 | How long solution-scoped tools wait server-side for an in-flight initial load before returning `error=Indexing`; `0` means do not wait. |
 | `Roslynk:IdleEvictionMinutes` | 30 | Minutes a solution may sit unused before the daemon evicts it; 0 disables eviction. |
 | `Roslynk:EvictionCheckMinutes` | 5 | Minutes between idle-eviction sweeps; floored at 1. |
-| `Roslynk:LoadFromCompilerCommandLines` | false | `true` builds a solution from the compiler command lines its build kept, when every project has a current one ("Faster solution loads"), instead of loading it through MSBuild. |
 
 To change a setting, copy or rename `appsettings.json.example` to `appsettings.json` beside the executable and uncomment what you need, then restart the daemon. The loader accepts JavaScript/C#-style comments, but VS Code flags them as errors in `.json` files unless you associate the file with JSONC in your settings:
 
@@ -330,39 +329,39 @@ To change a setting, copy or rename `appsettings.json.example` to `appsettings.j
 "files.associations": { "appsettings*.json": "jsonc" }
 ```
 
-An `appsettings.json` beside the executable lives inside the tool's version directory (`~/.dotnet/tools/.store/roslynk/<version>/...`), so the next `dotnet tool update` extracts a fresh tool and silently loses your edit. For durable overrides use the equivalent environment variables, which the same configuration reads: `Roslynk__Port`, `Roslynk__MaxResponseChars`, `Roslynk__LoadWaitSeconds`, `Roslynk__IdleEvictionMinutes`, `Roslynk__EvictionCheckMinutes`, `Roslynk__LoadFromCompilerCommandLines`.
+An `appsettings.json` beside the executable lives inside the tool's version directory (`~/.dotnet/tools/.store/roslynk/<version>/...`), so the next `dotnet tool update` extracts a fresh tool and silently loses your edit. For durable overrides use the equivalent environment variables, which the same configuration reads: `Roslynk__Port`, `Roslynk__MaxResponseChars`, `Roslynk__LoadWaitSeconds`, `Roslynk__IdleEvictionMinutes`, `Roslynk__EvictionCheckMinutes`.
 
 A shared daemon serves every client with one set of values — set the smallest response cap your clients need.
 
 ### Faster solution loads
 
-Opening a solution normally runs a design-time build of every project through MSBuild, which takes about a quarter
-of a second per project and runs again whenever a project or build file changes. A build can keep what that
-design-time build would find, the C# compiler's command line, beside each project's outputs. When every C# project
-of the solution has a current one, Roslynk builds the solution from those files instead, without MSBuild: on a
-133-project solution, `open_solution` was ready in 5.8s instead of 32s, with the same diagnostics, references and
-callers. Add this to a `Directory.Build.targets` that every project imports, then
-build (Debug), and set `Roslynk:LoadFromCompilerCommandLines` to `true` (or `Roslynk__LoadFromCompilerCommandLines=true`):
+Opening a solution runs a design-time build of every project through MSBuild, which takes about a quarter of a second
+per project. Roslynk keeps what that build works out, each project's C# compiler arguments, and the next time it opens
+the same solution it builds the projects from those arguments instead, without MSBuild, as long as nothing they came
+from has changed. There is nothing to set up or add to the solution.
 
-```xml
-<Project>
-  <PropertyGroup>
-    <ProvideCommandLineArgs>true</ProvideCommandLineArgs>
-  </PropertyGroup>
-  <Target Name="KeepCompilerCommandLine" AfterTargets="CoreCompile"
-          Condition="'$(DesignTimeBuild)' != 'true' and '@(CscCommandLineArgs)' != ''">
-    <WriteLinesToFile File="$(IntermediateOutputPath)$(MSBuildProjectFile).csc.rsp"
-                      Lines="@(CscCommandLineArgs)" Overwrite="true" />
-  </Target>
-</Project>
-```
+The arguments are captured during the load Roslynk runs anyway: it passes its own targets file to MSBuild as the
+global property `CustomAfterMicrosoftCommonTargets`, and a target there writes the arguments after `CoreCompile`, which
+a design-time build runs without compiling. Nothing needs to be built. A solution whose projects or `Directory.Build.*`
+files set `CustomAfterMicrosoftCommonTargets` themselves loads through MSBuild without it, so their value is kept;
+one set by a NuGet package is not detected.
 
-A file is used only while it still describes its project: it must not be older than the assembly compiled beside it,
-the project file, the `Directory.*.props`/`.targets` above it or its `project.assets.json`, every source file it lists
-must exist, and no C# file it does not list may have been added since. If any project fails that, or a project has
-none, the whole solution loads through MSBuild as before. Projects whose SDK compiles nothing (`Microsoft.Build.NoTargets`,
-`Microsoft.Build.Traversal`) are left out, and the solution is what the compiler saw: a generated file the design-time
-build leaves out (MVC's `MvcApplicationPartsAssemblyInfo.cs`) is included.
+The cache lives in your local application data folder (`Roslynk/CompilerArguments`), one entry per solution path, so
+worktrees do not share entries; an entry unused for 30 days is deleted. The next load goes through MSBuild, and
+captures again, when any of these changed since the capture:
+
+- the solution file, a project file, a `Directory.Build.props`/`.targets`, `Directory.Packages.props` or
+  `global.json` above a project (including one added where there was none), or a file they `<Import>`;
+- a project's restore output (`project.assets.json`, NuGet's generated `.props`/`.targets`);
+- which source files exist in a project's folder (a `.cs` file, an `.editorconfig`, or a file of a kind it lists as
+  an additional file, such as `.razor`, added or deleted), or whether a file it lists exists;
+- an environment variable those files mention, or one that steers MSBuild, the SDK or restore;
+- the installed .NET SDKs, or the version of Roslynk.
+
+Editing a source file, including a `#define` in it, does not invalidate the cache. A load is cached only when the
+solution rebuilt from its arguments matches what MSBuild loaded, fact for fact. A project whose imports Roslynk cannot
+name from the files' text (an `<Import>` whose path depends on a property), a VB or F# project, or a build input that
+changed while the solution was loading, leaves the solution to load through MSBuild each time.
 
 ## Run (Windows)
 
