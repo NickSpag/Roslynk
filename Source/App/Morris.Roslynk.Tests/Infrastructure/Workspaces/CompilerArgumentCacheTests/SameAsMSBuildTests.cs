@@ -37,6 +37,10 @@ public class SameAsMSBuildTests(ITestOutputHelper output)
 		await AssertCachedLoadMatchesAsync(TestSolutions.CreateScratchLinkedSolution());
 
 	[Fact]
+	public async Task WhenAProjectCompilesNothing_ThenTheCachedLoadMatchesMSBuilds() =>
+		await AssertCachedLoadMatchesAsync(TestSolutions.CreateScratchLinkedSolution(withNoTargetsProject: true));
+
+	[Fact]
 	public async Task WhenTheGeneratorIsBuilt_ThenTheCachedLoadMatchesMSBuilds() =>
 		await AssertCachedLoadMatchesAsync(TestSolutions.CreateScratchGeneratorSolution());
 

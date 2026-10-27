@@ -93,6 +93,11 @@ internal static partial class CompilerCommandLineLoad
 				.WithAssemblyPath(cached.CompilationOutputAssemblyPath)
 				.WithGeneratedFilesOutputDirectory(cached.GeneratedFilesOutputDirectory))
 			.WithDefaultNamespace(cached.DefaultNamespace)
+			.WithAssemblyName(cached.AssemblyName)
+			.WithDocuments(info.Documents.Select(document =>
+				document.FilePath is string path && cached.LinkedDocumentFolders.TryGetValue(FileStamp.NormalizePath(path), out string[]? folders)
+					? document.WithFolders(folders)
+					: document))
 			.WithAnalyzerReferences([.. info.AnalyzerReferences, .. cached.UnresolvedAnalyzers.Select(path => new UnresolvedAnalyzerReference(path))])
 			.WithProjectReferences(cached.ProjectReferences
 				.Where(reference => ids.ContainsKey((reference.FilePath, reference.Name)))

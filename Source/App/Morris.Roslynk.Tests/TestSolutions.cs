@@ -272,9 +272,12 @@ internal static class TestSolutions
 
 	/// <summary>
 	/// A two-project solution written to a fresh temp directory and restored, not built: Lib targets net8.0 and
-	/// net10.0, with RootNamespace Linked.Library, and App (net10.0) references it.
+	/// net10.0, with RootNamespace Linked.Library, and App (net10.0) references it and compiles Shared/Shared.cs,
+	/// outside its folder, linked as Common/Shared.cs. With
+	/// <paramref name="withNoTargetsProject"/>, a third project uses the Microsoft.Build.NoTargets SDK, which compiles
+	/// nothing.
 	/// </summary>
-	public static string CreateScratchLinkedSolution()
+	public static string CreateScratchLinkedSolution(bool withNoTargetsProject = false)
 	{
 		string root = Path.Combine(Path.GetTempPath(), "roslynk-tests", Guid.NewGuid().ToString("N"), "LinkedSolution");
 		void Write(string relative, string text)
@@ -301,11 +304,25 @@ internal static class TestSolutions
 			    <OutputType>Exe</OutputType>
 			    <ImplicitUsings>enable</ImplicitUsings>
 			  </PropertyGroup>
-			  <ItemGroup><ProjectReference Include="../Lib/Lib.csproj" /></ItemGroup>
+			  <ItemGroup>
+			    <ProjectReference Include="../Lib/Lib.csproj" />
+			    <Compile Include="../Shared/Shared.cs" Link="Common/Shared.cs" />
+			  </ItemGroup>
 			</Project>
 			""");
+		Write("Shared/Shared.cs", "namespace Linked;\n\ninternal static class Shared;\n");
 		Write("App/Program.cs", "Console.WriteLine(Linked.Library.Greeter.Greet(\"world\"));\n");
 		Write("LinkedSolution.slnx", "<Solution>\n  <Project Path=\"App/App.csproj\" />\n  <Project Path=\"Lib/Lib.csproj\" />\n</Solution>\n");
+
+		if (withNoTargetsProject)
+		{
+			Write("Tools/Tools.csproj", """
+				<Project Sdk="Microsoft.Build.NoTargets/3.7.0">
+				  <PropertyGroup><TargetFramework>netstandard2.0</TargetFramework></PropertyGroup>
+				</Project>
+				""");
+			Write("LinkedSolution.slnx", "<Solution>\n  <Project Path=\"App/App.csproj\" />\n  <Project Path=\"Lib/Lib.csproj\" />\n  <Project Path=\"Tools/Tools.csproj\" />\n</Solution>\n");
+		}
 
 		string solutionPath = Path.Combine(root, "LinkedSolution.slnx");
 		Restore(solutionPath);

@@ -3,6 +3,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.Diagnostics;
 
 namespace Morris.Roslynk.Infrastructure.Workspaces;
@@ -285,6 +286,12 @@ internal sealed class CompilerArgumentCache
 			CapturedArguments[] captures = capturesByProject[sameFile.Key]
 				.DistinctBy(c => c.TargetFramework, StringComparer.Ordinal)
 				.ToArray();
+
+			// A project whose SDK compiles nothing (Microsoft.Build.NoTargets, Traversal) never runs CoreCompile, so
+			// nothing is captured, and MSBuildWorkspace takes its options from its properties instead. It is kept with
+			// arguments written from those options, and the check below compares it like any other.
+			if (captures.Length == 0 && sameFile.Count() == 1 && !sameFile.Single().Documents.Any())
+				captures = [new CapturedArguments(sameFile.Key, "", null, null, ArgumentsFor(sameFile.Single()))];
 			if (captures.Length != sameFile.Count())
 				return $"{Path.GetFileName(sameFile.Key)} has {captures.Length} captured compiler command lines for {sameFile.Count()} loaded projects";
 
@@ -333,7 +340,7 @@ internal sealed class CompilerArgumentCache
 			Solution rebuilt = CompilerCommandLineLoad.Build(check, solutionPath, projects);
 			string[] differences = ProjectFacts.Differences(ProjectFacts.Describe(loaded), "MSBuild", ProjectFacts.Describe(rebuilt), "captured");
 			if (differences.Length > 0)
-				return $"the captured compiler arguments do not rebuild the loaded solution ({differences[0]})";
+				return $"the captured compiler arguments do not rebuild the loaded solution ({differences.Length} differences: {string.Join("; ", differences.Take(5))})";
 		}
 
 		var entry = new CacheEntry(
@@ -400,12 +407,64 @@ internal sealed class CompilerArgumentCache
 			project.CompilationOutputInfo.AssemblyPath,
 			project.CompilationOutputInfo.GeneratedFilesOutputDirectory,
 			project.DefaultNamespace,
+			project.AssemblyName,
 			project.ParseOptions?.DocumentationMode ?? DocumentationMode.Parse,
+			// A file outside the project's folder takes its folders from its Link metadata, which the arguments lack.
+			project.Documents
+				.Where(document => document.FilePath is string path && !IsUnder(path, projectDirectory))
+				.DistinctBy(document => document.FilePath, StringComparer.Ordinal)
+				.ToDictionary(document => FileStamp.NormalizePath(document.FilePath!), document => document.Folders.ToArray(), StringComparer.Ordinal),
 			projectReferences,
 			replaced,
 			[.. project.AnalyzerReferences.OfType<UnresolvedAnalyzerReference>().Select(reference => FileStamp.NormalizePath(reference.FullPath))],
 			extensions,
 			membership);
+	}
+
+	/// <summary>Compiler arguments for a project's options, for a project that compiles nothing and so has none captured.</summary>
+	private static string[] ArgumentsFor(Project project)
+	{
+		var arguments = new List<string>();
+		if (project.CompilationOptions is CSharpCompilationOptions compilation)
+		{
+			arguments.Add(compilation.OutputKind switch
+			{
+				OutputKind.ConsoleApplication => "/target:exe",
+				OutputKind.WindowsApplication => "/target:winexe",
+				OutputKind.NetModule => "/target:module",
+				OutputKind.WindowsRuntimeMetadata => "/target:winmdobj",
+				OutputKind.WindowsRuntimeApplication => "/target:appcontainerexe",
+				_ => "/target:library",
+			});
+			arguments.Add($"/warn:{compilation.WarningLevel}");
+			arguments.Add($"/nullable:{compilation.NullableContextOptions.ToString().ToLowerInvariant()}");
+			arguments.Add(compilation.AllowUnsafe ? "/unsafe+" : "/unsafe-");
+			arguments.Add(compilation.CheckOverflow ? "/checked+" : "/checked-");
+			arguments.Add(compilation.OptimizationLevel == OptimizationLevel.Release ? "/optimize+" : "/optimize-");
+			if (compilation.GeneralDiagnosticOption == ReportDiagnostic.Error)
+				arguments.Add("/warnaserror+");
+			foreach ((string id, ReportDiagnostic report) in compilation.SpecificDiagnosticOptions)
+			{
+				string? option = report switch
+				{
+					ReportDiagnostic.Suppress => $"/nowarn:{id}",
+					ReportDiagnostic.Error => $"/warnaserror+:{id}",
+					ReportDiagnostic.Warn => $"/warnaserror-:{id}",
+					_ => null,
+				};
+				if (option is not null)
+					arguments.Add(option);
+			}
+		}
+
+		if (project.ParseOptions is CSharpParseOptions parse)
+		{
+			arguments.Add($"/langversion:{parse.SpecifiedLanguageVersion.ToDisplayString()}");
+			if (parse.PreprocessorSymbolNames.Any())
+				arguments.Add($"/define:{string.Join(';', parse.PreprocessorSymbolNames)}");
+		}
+
+		return [.. arguments];
 	}
 
 	/// <summary>Every file the project lists, whose existence the entry depends on; references to other projects are project references.</summary>
@@ -567,7 +626,9 @@ internal sealed record CachedProject(
 	string? CompilationOutputAssemblyPath,
 	string? GeneratedFilesOutputDirectory,
 	string? DefaultNamespace,
+	string AssemblyName,
 	DocumentationMode DocumentationMode,
+	Dictionary<string, string[]> LinkedDocumentFolders,
 	CachedProjectReference[] ProjectReferences,
 	string[] ReplacedReferences,
 	string[] UnresolvedAnalyzers,
