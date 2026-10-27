@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- OpenTelemetry span and metric tag values are recorded in full instead of being silently capped at 64 characters, so `mcp.tool.arg.*` tool-call arguments, `roslynk.solution.path`, `roslynk.symbol.name` and `roslynk.file.path` are usable in Aspire (Fixes #172)
 - With `Roslynk:LoadFromCompilerCommandLines=true`, a solution whose projects each kept their C# compiler command line from the last build (`obj/Debug/<framework>/<project file>.csc.rsp`; README, "Faster solution loads") is built from those files without MSBuild, in seconds; any project without a current one loads the whole solution through MSBuild as before (Fixes #170)
 - Read-only tools run through a shared snapshot guard that returns `error=Stale` (with the current `snapshot=<id>`) when the solution changes mid-query or the query is cancelled, and `multi_query` rejects the whole batch rather than mixing generations; write tools stay on the write pipeline (Fixes #165)
 - `get_solution_status` reports NuGet restore warnings (NU1902/NU1903/NU1510 ...) as `loadWarning=<code>: <message>` instead of `loadDiagnostic=`, by matching each load failure's text against the Warning-level entries the restore wrote to the projects' `project.assets.json` (Fixes #163)
