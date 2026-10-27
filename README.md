@@ -339,7 +339,7 @@ Opening a solution runs a design-time build of every project through MSBuild, wh
 per project. Roslynk keeps what that build works out, each project's C# compiler arguments, and the next time it opens
 the same solution it builds the projects from those arguments instead, without MSBuild, as long as nothing they came
 from has changed. There is nothing to set up or add to the solution. On a 133-project solution, a load took 1.3s
-from the cache against 26s through MSBuild.
+from the cache against 25s through MSBuild.
 
 The arguments are captured during the load Roslynk runs anyway: MSBuild writes a binary log of that design-time
 build to a temporary file, which holds each project's compiler arguments (a design-time build hands them to the
