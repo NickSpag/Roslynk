@@ -46,20 +46,23 @@ public class SameAsMSBuildTests(ITestOutputHelper output)
 
 	[Theory]
 	[MemberData(nameof(Fixtures))]
-	public async Task WhenRoslynkSuppliesItsCaptureTarget_ThenMSBuildLoadsTheSameSolution(string fixture, string solutionFile)
+	public async Task WhenTheLoadIsLogged_ThenMSBuildLoadsTheSameSolutionAndEveryProjectIsCaptured(string fixture, string solutionFile)
 	{
 		string solutionPath = TestSolutions.CreateScratchFixture(fixture, solutionFile);
 		MsBuildRegistrar.EnsureRegistered();
 
-		using MSBuildWorkspace plain = MSBuildWorkspace.Create();
-		Solution withoutCapture = await plain.OpenSolutionAsync(solutionPath);
-
 		using CompilerArgumentCapture capture = CompilerArgumentCapture.Begin(TestCaches.New().Root);
-		using MSBuildWorkspace capturing = MSBuildWorkspace.Create(capture.GlobalProperties);
-		Solution withCapture = await capturing.OpenSolutionAsync(solutionPath);
+		using MSBuildWorkspace logged = MSBuildWorkspace.Create();
+		Solution withLog = await capture.OpenSolutionAsync(logged, solutionPath, new Progress<ProjectLoadProgress>(), CancellationToken.None);
 
-		AssertNoDifferences(ProjectFacts.Describe(withoutCapture), "without capture", ProjectFacts.Describe(withCapture), "with capture");
-		Assert.Equal(withCapture.Projects.Count(), capture.Read().Count);
+		using MSBuildWorkspace plain = MSBuildWorkspace.Create();
+		Solution withoutLog = await plain.OpenSolutionAsync(solutionPath);
+
+		AssertNoDifferences(ProjectFacts.Describe(withoutLog), "without log", ProjectFacts.Describe(withLog), "with log");
+		CapturedLoad captured = capture.Read();
+		Assert.Equal(withLog.Projects.Count(project => project.Documents.Any()), captured.Arguments.Count);
+		Assert.All(captured.Arguments, arguments => Assert.NotNull(arguments.ProjectAssetsFile));
+		Assert.Single(captured.SdkFolders);
 	}
 
 	private async Task AssertCachedLoadMatchesAsync(string solutionPath)

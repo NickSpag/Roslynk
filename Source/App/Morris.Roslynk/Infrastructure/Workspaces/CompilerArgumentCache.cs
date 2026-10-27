@@ -9,26 +9,27 @@ using Microsoft.CodeAnalysis.Diagnostics;
 namespace Morris.Roslynk.Infrastructure.Workspaces;
 
 /// <summary>
-/// The compiler arguments of each project of a solution, captured during an MSBuildWorkspace load
+/// The compiler arguments of each project of a solution, captured from the binary log of an MSBuildWorkspace load
 /// (<see cref="CompilerArgumentCapture"/>) and reused by later loads of the same solution while nothing they were
 /// worked out from has changed, so those loads need no design-time build. One entry per solution path, holding
 /// one capture per project and target framework, with the facts MSBuildWorkspace adds to what the compiler is told
 /// (project references, output paths, default namespace), the load's diagnostics, and what the entry was worked
-/// out from:
+/// out from (<see cref="BuildInputs"/>):
 /// <list type="bullet">
-/// <item>the content (write time and length) of the solution file and of each project's <see cref="BuildInputs"/>
-/// files, including <c>project.assets.json</c>;</item>
+/// <item>the content (write time and length) of the solution file and of the build files, imports and restore output
+/// each project's evaluation depends on;</item>
 /// <item>the existence of every file the projects list (sources, references, analyzers, analyzer configs) and of each
-/// <c>Directory.Build.*</c>, <c>Directory.Packages.props</c> and <c>global.json</c> that would be imported if it were
-/// added;</item>
+/// <c>Directory.Build.*</c>, <c>Directory.Packages.props</c> and <c>global.json</c> that would be read if it were added
+/// above a project;</item>
 /// <item>which source files exist in each project's folder, so a file added or deleted under a default glob counts;</item>
-/// <item>the environment variables the build files read, and the installed SDKs.</item>
+/// <item>the environment variables the solution's, its packages' and the SDK's build files name, and the installed
+/// SDKs.</item>
 /// </list>
 /// An ordinary source edit changes none of these, so it keeps the entry; the workspace reads source text from disk.
 /// Anything that changes one, a missing entry, or an entry from another Roslynk version, loads through MSBuild,
 /// which captures again and replaces the entry. A load is stored only when the solution rebuilt from it describes
-/// exactly as MSBuildWorkspace's did (<see cref="ProjectFacts"/>), and never when a build input changed during the
-/// load.
+/// exactly as MSBuildWorkspace's did (<see cref="ProjectFacts"/>), never when a build input changed during the load,
+/// and never when <see cref="BuildInputs.Of"/> finds the load depends on what it cannot record.
 /// </summary>
 internal sealed class CompilerArgumentCache
 {
@@ -130,7 +131,7 @@ internal sealed class CompilerArgumentCache
 
 		foreach ((string name, string? value) in entry.Environment)
 		{
-			if (Environment.GetEnvironmentVariable(name) != value)
+			if (EnvironmentValue(name) != value)
 				return $"the environment variable {name} changed";
 		}
 
@@ -164,68 +165,25 @@ internal sealed class CompilerArgumentCache
 		return null;
 	}
 
-	/// <summary>
-	/// A capture for the load about to run, or null with the reason when Roslynk must not supply its targets:
-	/// <c>CustomAfterMicrosoftCommonTargets</c> as a global property would replace a value the solution's projects or
-	/// the environment set, and so change even the load itself. Only the projects the solution lists and the
-	/// <c>Directory.Build.*</c> above them are checked; a package that sets it is not seen.
-	/// </summary>
+	/// <summary>A capture for the load about to run, or null with the reason it cannot be captured.</summary>
 	public CompilerArgumentCapture? BeginCapture(string solutionPath, out string reason)
 	{
-		CompilerArgumentCapture? capture = Capture(solutionPath, out reason);
-		LastStoreReason = reason;
-		return capture;
-	}
-
-	private CompilerArgumentCapture? Capture(string solutionPath, out string reason)
-	{
 		ArgumentNullException.ThrowIfNull(solutionPath);
+		CompilerArgumentCapture? capture;
 		try
 		{
-			if (Environment.GetEnvironmentVariable(CompilerArgumentCapture.TargetsProperty) is { Length: > 0 })
-			{
-				reason = $"the environment sets {CompilerArgumentCapture.TargetsProperty}";
-				return null;
-			}
-
-			if (SetsCustomAfterTargets(solutionPath) is string file)
-			{
-				reason = $"{file} sets {CompilerArgumentCapture.TargetsProperty}";
-				return null;
-			}
-
 			Sweep();
+			capture = CompilerArgumentCapture.Begin(Root);
 			reason = "";
-			return CompilerArgumentCapture.Begin(Root);
 		}
-		catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or System.Xml.XmlException)
+		catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
 		{
+			capture = null;
 			reason = $"compiler arguments cannot be captured ({exception.Message})";
-			return null;
-		}
-	}
-
-	private static string? SetsCustomAfterTargets(string solutionPath)
-	{
-		var checkedFiles = new HashSet<string>(StringComparer.Ordinal);
-		foreach (string projectFile in CompilerCommandLineLoad.SolutionProjectFiles(solutionPath))
-		{
-			var candidates = new List<string> { projectFile };
-			for (DirectoryInfo? directory = new FileInfo(projectFile).Directory; directory is not null; directory = directory.Parent)
-			{
-				candidates.Add(Path.Combine(directory.FullName, "Directory.Build.props"));
-				candidates.Add(Path.Combine(directory.FullName, "Directory.Build.targets"));
-			}
-
-			foreach (string candidate in candidates)
-			{
-				if (checkedFiles.Add(candidate) && File.Exists(candidate)
-					&& File.ReadAllText(candidate).Contains($"<{CompilerArgumentCapture.TargetsProperty}", StringComparison.OrdinalIgnoreCase))
-					return candidate;
-			}
 		}
 
-		return null;
+		LastStoreReason = reason;
+		return capture;
 	}
 
 	/// <summary>
@@ -269,17 +227,11 @@ internal sealed class CompilerArgumentCache
 		if (loaded.Projects.FirstOrDefault(project => project.Language != LanguageNames.CSharp) is Project other)
 			return $"{other.Name} is not a C# project";
 
-		ILookup<string, CapturedArguments> capturesByProject = capture.Read().ToLookup(c => c.ProjectFile, StringComparer.Ordinal);
-		var stamps = new SortedDictionary<string, string>(StringComparer.Ordinal);
-		var exists = new SortedDictionary<string, bool>(StringComparer.Ordinal);
-		var environment = new SortedDictionary<string, string?>(StringComparer.Ordinal);
+		CapturedLoad captured = capture.Read();
+		ILookup<string, CapturedArguments> capturesByProject = captured.Arguments.ToLookup(c => c.ProjectFile, StringComparer.Ordinal);
 		var projects = new List<CachedProject>();
-		var inputsByProject = new Dictionary<string, BuildInputs>(StringComparer.Ordinal);
-
-		string fullSolutionPath = Path.GetFullPath(solutionPath);
-		if (FileStamp.Of(fullSolutionPath) is not string solutionStamp)
-			return "the solution file could not be read";
-		stamps[fullSolutionPath] = solutionStamp;
+		var used = new List<CapturedArguments>();
+		var exists = new SortedDictionary<string, bool>(StringComparer.Ordinal);
 
 		foreach (IGrouping<string, Project> sameFile in loaded.Projects.GroupBy(project => FileStamp.NormalizePath(project.FilePath ?? ""), StringComparer.Ordinal))
 		{
@@ -291,40 +243,20 @@ internal sealed class CompilerArgumentCache
 			// nothing is captured, and MSBuildWorkspace takes its options from its properties instead. It is kept with
 			// arguments written from those options, and the check below compares it like any other.
 			if (captures.Length == 0 && sameFile.Count() == 1 && !sameFile.Single().Documents.Any())
-				captures = [new CapturedArguments(sameFile.Key, "", null, null, ArgumentsFor(sameFile.Single()))];
+				captures = [new CapturedArguments(sameFile.Key, "", null, ArgumentsFor(sameFile.Single()))];
 			if (captures.Length != sameFile.Count())
 				return $"{Path.GetFileName(sameFile.Key)} has {captures.Length} captured compiler command lines for {sameFile.Count()} loaded projects";
 
 			foreach (Project project in sameFile)
 			{
-				CapturedArguments? captured = captures.Length == 1
+				CapturedArguments? arguments = captures.Length == 1
 					? captures[0]
 					: captures.FirstOrDefault(c => string.Equals(c.TargetFramework, ProjectFramework.Of(project), StringComparison.OrdinalIgnoreCase));
-				if (captured is null)
+				if (arguments is null)
 					return $"{project.Name}'s target framework has no captured compiler command line";
 
-				if (!inputsByProject.TryGetValue(captured.ProjectFile + "|" + captured.TargetFramework, out BuildInputs? inputs))
-				{
-					inputs = NamedBuildInputs.Of(captured);
-					inputsByProject[captured.ProjectFile + "|" + captured.TargetFramework] = inputs;
-				}
-
-				if (inputs.Uncertain is string uncertain)
-					return uncertain;
-
-				foreach (string file in inputs.Files)
-				{
-					if (FileStamp.Of(file) is not string stamp || File.GetLastWriteTimeUtc(file) >= loadStartedUtc)
-						return $"{file} changed while the solution loaded";
-					stamps[file] = stamp;
-				}
-
-				foreach (string probe in inputs.Probes)
-					exists[probe] = File.Exists(probe);
-				foreach (string name in inputs.EnvironmentVariables)
-					environment[name] = Environment.GetEnvironmentVariable(name);
-
-				CachedProject cached = Describe(project, captured, loaded, loadStartedUtc, out string? notCached);
+				used.Add(arguments);
+				CachedProject cached = Describe(project, arguments, loaded, loadStartedUtc, out string? notCached);
 				if (notCached is not null)
 					return notCached;
 
@@ -333,6 +265,27 @@ internal sealed class CompilerArgumentCache
 				projects.Add(cached);
 			}
 		}
+
+		BuildInputs inputs = BuildInputs.Of(solutionPath, used, captured.SdkFolders);
+		if (inputs.Uncertain is string uncertain)
+			return uncertain;
+
+		var stamps = new SortedDictionary<string, string>(StringComparer.Ordinal);
+		foreach (string file in inputs.Files)
+		{
+			if (FileStamp.Of(file) is not string stamp)
+				return $"{file} could not be read";
+			if (File.GetLastWriteTimeUtc(file) >= loadStartedUtc)
+				return $"{file} changed while the solution loaded";
+			stamps[file] = stamp;
+		}
+
+		foreach (string probe in inputs.Probes)
+			exists[probe] = File.Exists(probe);
+
+		var environment = new SortedDictionary<string, string?>(StringComparer.Ordinal);
+		foreach (string name in inputs.EnvironmentVariables)
+			environment[name] = EnvironmentValue(name);
 
 		// Stored only when the arguments rebuild what MSBuildWorkspace loaded, fact for fact.
 		using (var check = new AdhocWorkspace())
@@ -343,6 +296,7 @@ internal sealed class CompilerArgumentCache
 				return $"the captured compiler arguments do not rebuild the loaded solution ({differences.Length} differences: {string.Join("; ", differences.Take(5))})";
 		}
 
+		string fullSolutionPath = Path.GetFullPath(solutionPath);
 		var entry = new CacheEntry(
 			Format,
 			RoslynkVersion,
@@ -419,6 +373,24 @@ internal sealed class CompilerArgumentCache
 			[.. project.AnalyzerReferences.OfType<UnresolvedAnalyzerReference>().Select(reference => FileStamp.NormalizePath(reference.FullPath))],
 			extensions,
 			membership);
+	}
+
+	/// <summary>
+	/// The value MSBuild sees for a property read from the environment. Property names are case-insensitive, so on a
+	/// system whose variable names are not, every variable by that name counts.
+	/// </summary>
+	private static string? EnvironmentValue(string name)
+	{
+		if (OperatingSystem.IsWindows())
+			return Environment.GetEnvironmentVariable(name);
+
+		string[] values = Environment.GetEnvironmentVariables().Keys
+			.OfType<string>()
+			.Where(key => string.Equals(key, name, StringComparison.OrdinalIgnoreCase))
+			.Order(StringComparer.Ordinal)
+			.Select(key => $"{key}={Environment.GetEnvironmentVariable(key)}")
+			.ToArray();
+		return values.Length == 0 ? null : string.Join('\n', values);
 	}
 
 	/// <summary>Compiler arguments for a project's options, for a project that compiles nothing and so has none captured.</summary>
@@ -527,6 +499,19 @@ internal sealed class CompilerArgumentCache
 	/// </summary>
 	private static string SdkSelection()
 	{
+		if (DotnetRoot() is not string root)
+			return "";
+
+		string sdkFolder = Path.Combine(root, "sdk");
+		string[] sdks = Directory.Exists(sdkFolder)
+			? [.. Directory.GetDirectories(sdkFolder).Select(Path.GetFileName).OfType<string>().Order(StringComparer.Ordinal)]
+			: [];
+		return $"{root}|{string.Join(',', sdks)}";
+	}
+
+	/// <summary>The folder of the <c>dotnet</c> the build host runs on: <c>DOTNET_HOST_PATH</c>, or the first on <c>PATH</c>.</summary>
+	private static string? DotnetRoot()
+	{
 		string? host = Environment.GetEnvironmentVariable("DOTNET_HOST_PATH");
 		if (string.IsNullOrEmpty(host))
 		{
@@ -538,14 +523,10 @@ internal sealed class CompilerArgumentCache
 		}
 
 		if (host is null)
-			return "";
+			return null;
 
 		string resolved = new FileInfo(host).ResolveLinkTarget(returnFinalTarget: true)?.FullName ?? host;
-		string sdkFolder = Path.Combine(Path.GetDirectoryName(resolved)!, "sdk");
-		string[] sdks = Directory.Exists(sdkFolder)
-			? [.. Directory.GetDirectories(sdkFolder).Select(Path.GetFileName).OfType<string>().Order(StringComparer.Ordinal)]
-			: [];
-		return $"{resolved}|{string.Join(',', sdks)}";
+		return Path.GetDirectoryName(resolved);
 	}
 
 	/// <summary>Marks an entry used, so the sweep keeps it.</summary>

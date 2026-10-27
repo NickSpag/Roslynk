@@ -128,7 +128,7 @@ public sealed class SolutionWorkspace : IDisposable
 			loadActivity?.SetTag(ReasonTag, captureReason);
 			DateTime loadStartedUtc = DateTime.UtcNow;
 
-			MSBuildWorkspace workspace = MSBuildWorkspace.Create(capture?.GlobalProperties ?? new Dictionary<string, string>());
+			MSBuildWorkspace workspace = MSBuildWorkspace.Create();
 			Solution solution;
 
 			using (workspace.RegisterWorkspaceFailedHandler(e => workspaceFailures.Add(e.Diagnostic)))
@@ -170,7 +170,10 @@ public sealed class SolutionWorkspace : IDisposable
 						progress?.Report(p);
 					});
 
-					solution = await workspace.OpenSolutionAsync(solutionPath, trackingProgress, cancellationToken);
+					// With a capture, the design-time build is also logged, for the cache to read the compiler arguments from.
+					solution = capture is null
+						? await workspace.OpenSolutionAsync(solutionPath, trackingProgress, cancellationToken)
+						: await capture.OpenSolutionAsync(workspace, solutionPath, trackingProgress, cancellationToken);
 
 					foreach (Activity a in projectSpans.Values)
 					{

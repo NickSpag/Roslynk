@@ -11,7 +11,7 @@ namespace Morris.Roslynk.Tests.Infrastructure.Workspaces.CompilerArgumentCacheTe
 public class CaptureTests
 {
 	[Fact]
-	public async Task WhenTheSolutionSetsCustomAfterMicrosoftCommonTargets_ThenItsTargetsStillRunAndNothingIsCached()
+	public async Task WhenTheSolutionSetsCustomAfterMicrosoftCommonTargets_ThenItsTargetsRunAndTheLoadIsCached()
 	{
 		string solutionPath = TestSolutions.CreateScratchLinkedSolution();
 		string directory = Path.GetDirectoryName(solutionPath)!;
@@ -24,12 +24,45 @@ public class CaptureTests
 		CompilerArgumentCache cache = TestCaches.New();
 
 		using SolutionWorkspace first = await SolutionWorkspace.LoadAsync(solutionPath, cache);
-		Assert.EndsWith("Directory.Build.props sets CustomAfterMicrosoftCommonTargets", cache.LastStoreReason, StringComparison.Ordinal);
+		Assert.True(cache.LastStoreReason == "", $"not stored: {cache.LastStoreReason}");
 		using SolutionWorkspace second = await SolutionWorkspace.LoadAsync(solutionPath, cache);
 
-		Assert.False(second.LoadedFromCache);
+		Assert.True(second.LoadedFromCache, cache.LastLoadReason);
 		foreach (Project project in second.Solution.Projects)
 			Assert.Contains("FROM_OWN_TARGETS", ((CSharpParseOptions)project.ParseOptions!).PreprocessorSymbolNames);
+	}
+
+	[Fact]
+	public async Task WhenTheSolutionsOwnBuildFilesReadAFile_ThenTheLoadIsNotCached()
+	{
+		string solutionPath = TestSolutions.CreateScratchLinkedSolution();
+		string directory = Path.GetDirectoryName(solutionPath)!;
+		File.WriteAllText(Path.Combine(directory, "version.txt"), "1.2.3");
+		File.WriteAllText(
+			Path.Combine(directory, "Directory.Build.props"),
+			"<Project><PropertyGroup><Version>$([System.IO.File]::ReadAllText('$(MSBuildThisFileDirectory)version.txt'))</Version></PropertyGroup></Project>");
+		CompilerArgumentCache cache = TestCaches.New();
+
+		using SolutionWorkspace first = await SolutionWorkspace.LoadAsync(solutionPath, cache);
+
+		Assert.EndsWith("Directory.Build.props reads files (System.IO.File), which the cache cannot track", cache.LastStoreReason, StringComparison.Ordinal);
+	}
+
+	[Fact]
+	public async Task WhenAnImportsPathDependsOnAProperty_ThenTheLoadIsNotCached()
+	{
+		string solutionPath = TestSolutions.CreateScratchLinkedSolution();
+		string directory = Path.GetDirectoryName(solutionPath)!;
+		Directory.CreateDirectory(Path.Combine(directory, "build"));
+		File.WriteAllText(Path.Combine(directory, "build", "Shared.props"), "<Project />");
+		File.WriteAllText(
+			Path.Combine(directory, "Directory.Build.props"),
+			"<Project><PropertyGroup><SharedBuild>$(MSBuildThisFileDirectory)build/</SharedBuild></PropertyGroup><Import Project=\"$(SharedBuild)Shared.props\" /></Project>");
+		CompilerArgumentCache cache = TestCaches.New();
+
+		using SolutionWorkspace first = await SolutionWorkspace.LoadAsync(solutionPath, cache);
+
+		Assert.EndsWith("imports '$(SharedBuild)Shared.props', whose path depends on more than its text", cache.LastStoreReason, StringComparison.Ordinal);
 	}
 
 	[Fact]

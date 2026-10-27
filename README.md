@@ -341,11 +341,10 @@ the same solution it builds the projects from those arguments instead, without M
 from has changed. There is nothing to set up or add to the solution. On a 133-project solution, a load took 1.3s
 from the cache against 26s through MSBuild.
 
-The arguments are captured during the load Roslynk runs anyway: it passes its own targets file to MSBuild as the
-global property `CustomAfterMicrosoftCommonTargets`, and a target there writes the arguments after `CoreCompile`, which
-a design-time build runs without compiling. Nothing needs to be built. A solution whose projects or `Directory.Build.*`
-files set `CustomAfterMicrosoftCommonTargets` themselves loads through MSBuild without it, so their value is kept;
-one set by a NuGet package is not detected.
+The arguments are captured during the load Roslynk runs anyway: MSBuild writes a binary log of that design-time
+build to a temporary file, which holds each project's compiler arguments (a design-time build hands them to the
+compiler task without compiling), and Roslynk reads it and deletes it at once. Nothing needs to be built, and nothing
+is added to the build.
 
 The cache lives in your local application data folder (`Roslynk/CompilerArguments`), one entry per solution path, so
 worktrees do not share entries; an entry unused for 30 days is deleted. The next load goes through MSBuild, and
@@ -356,13 +355,15 @@ captures again, when any of these changed since the capture:
 - a project's restore output (`project.assets.json`, NuGet's generated `.props`/`.targets`);
 - which source files exist in a project's folder (a `.cs` file, an `.editorconfig`, or a file of a kind it lists as
   an additional file, such as `.razor`, added or deleted), or whether a file it lists exists;
-- an environment variable those files mention, or one that steers MSBuild, the SDK or restore;
+- an environment variable those files, the packages' build files they import, or the SDK's own files mention, set or
+  not, or one that steers MSBuild, SDK selection or restore;
 - the installed .NET SDKs, or the version of Roslynk.
 
 Editing a source file, including a `#define` in it, does not invalidate the cache. A load is cached only when the
-solution rebuilt from its arguments matches what MSBuild loaded, fact for fact. A project whose imports Roslynk cannot
-name from the files' text (an `<Import>` whose path depends on a property), a VB or F# project, or a build input that
-changed while the solution was loading, leaves the solution to load through MSBuild each time.
+solution rebuilt from its arguments matches what MSBuild loaded, fact for fact. A solution loads through MSBuild each
+time when Roslynk cannot tell what its build depends on: an `<Import>` in its own build files whose path depends on a
+property, one of those files reading files (`ReadLinesFromFile`, `XmlPeek`, `JsonPeek`, `System.IO.File`), a VB or F#
+project, or a build input that changed while the solution was loading.
 
 ## Run (Windows)
 

@@ -1,103 +1,103 @@
+using System.Runtime.CompilerServices;
+using Microsoft.Build.Framework;
+using Microsoft.Build.Logging;
+using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.MSBuild;
+
 namespace Morris.Roslynk.Infrastructure.Workspaces;
 
 /// <summary>
-/// Keeps the compiler arguments of the design-time build MSBuildWorkspace already runs. Roslynk passes its own
-/// targets file as the global property <c>CustomAfterMicrosoftCommonTargets</c>, so every project imports it with
-/// nothing added to the solution; its target runs after <c>CoreCompile</c>, which a design-time build runs with
-/// <c>SkipCompilerExecution=true</c>, and writes <c>@(CscCommandLineArgs)</c> for each project and target framework
-/// to a folder of its own. Nothing in it can fail the build: the writes continue on error and their warning is a
-/// message.
+/// What the design-time build MSBuildWorkspace runs worked out, read from a binary log of it. The compiler arguments
+/// are logged as the <c>CscCommandLineArgs</c> output of each <c>Csc</c> task, which a design-time build runs with
+/// <c>SkipCompilerExecution=true</c>, so nothing is added to the build. MSBuildWorkspace runs that build in its
+/// out-of-process build host, so a log file is the only way out: it is written to a folder of Roslynk's own and
+/// deleted as soon as it has been read, since a build log can hold the values of environment variables.
+/// <para>
+/// Types from <c>Microsoft.Build</c> come from the SDK that <see cref="MsBuildRegistrar"/> registers, so they are only
+/// touched in methods that run after registration, never in this class's fields.
+/// </para>
 /// </summary>
 internal sealed class CompilerArgumentCapture : IDisposable
 {
-	public const string TargetsProperty = "CustomAfterMicrosoftCommonTargets";
-
-	public const string DirectoryProperty = "RoslynkCompilerArgumentsDirectory";
-
-	/// <summary>
-	/// Four <c>key=value</c> lines (the project, its target framework, its <c>project.assets.json</c> and the
-	/// folder NuGet's generated imports are in), then one compiler argument per line.
-	/// </summary>
-	internal const string Targets = """
-		<Project>
-		  <!--
-		    Roslynk passes this file as CustomAfterMicrosoftCommonTargets when it loads a solution, to keep the compiler
-		    arguments of the design-time build it runs anyway. Nothing here may fail that build.
-		  -->
-		  <PropertyGroup>
-		    <MSBuildWarningsAsMessages>$(MSBuildWarningsAsMessages);MSB3491</MSBuildWarningsAsMessages>
-		  </PropertyGroup>
-		  <Target Name="RoslynkCaptureCompilerArguments" AfterTargets="CoreCompile"
-		          Condition="'$(RoslynkCompilerArgumentsDirectory)' != '' and '@(CscCommandLineArgs)' != ''">
-		    <PropertyGroup>
-		      <_RoslynkCaptureFile>$(RoslynkCompilerArgumentsDirectory)/$([System.Guid]::NewGuid().ToString('N')).rsp</_RoslynkCaptureFile>
-		    </PropertyGroup>
-		    <WriteLinesToFile File="$(_RoslynkCaptureFile)" Overwrite="true" ContinueOnError="true"
-		                      Lines="project=$([MSBuild]::Escape('$(MSBuildProjectFullPath)'));framework=$(TargetFramework);assets=$([MSBuild]::Escape('$(ProjectAssetsFile)'));extensions=$([MSBuild]::Escape('$(MSBuildProjectExtensionsPath)'))" />
-		    <WriteLinesToFile File="$(_RoslynkCaptureFile)" ContinueOnError="true" Lines="@(CscCommandLineArgs)" />
-		  </Target>
-		</Project>
-		""";
-
-	private const int HeaderLines = 4;
+	private const string LogName = "load.binlog";
 
 	private readonly string Folder;
 
-	private CompilerArgumentCapture(string folder, string targetsFile)
+	private CompilerArgumentCapture(string folder)
 	{
 		Folder = folder;
-		GlobalProperties = new Dictionary<string, string>
-		{
-			[TargetsProperty] = targetsFile,
-			[DirectoryProperty] = folder,
-		};
 	}
 
-	/// <summary>The global properties to create the MSBuildWorkspace with.</summary>
-	public IDictionary<string, string> GlobalProperties { get; }
-
-	/// <summary>A capture into a new folder under <paramref name="root"/>, with the targets file written there once.</summary>
+	/// <summary>A capture into a new folder under <paramref name="root"/>.</summary>
 	public static CompilerArgumentCapture Begin(string root)
 	{
-		string targetsFile = Path.Combine(root, $"Roslynk.CaptureCompilerArguments.{StableHash.Of(Targets)[..12]}.targets");
-		if (!File.Exists(targetsFile))
-			AtomicWrite(targetsFile, Targets);
-
 		string folder = Path.Combine(root, "captures", Guid.NewGuid().ToString("N"));
 		Directory.CreateDirectory(folder);
-		return new CompilerArgumentCapture(folder, targetsFile);
+		return new CompilerArgumentCapture(folder);
 	}
+
+	/// <summary>Opens the solution in <paramref name="workspace"/>, logging its design-time build into this capture.</summary>
+	[MethodImpl(MethodImplOptions.NoInlining)]
+	public Task<Solution> OpenSolutionAsync(MSBuildWorkspace workspace, string solutionPath, IProgress<ProjectLoadProgress> progress, CancellationToken cancellationToken) =>
+		workspace.OpenSolutionAsync(solutionPath, new BinaryLogger { Parameters = Path.Combine(Folder, LogName) }, progress, cancellationToken);
 
 	/// <summary>
-	/// What the load's design-time builds wrote, one entry per project and target framework. A file the target
-	/// could not finish (no arguments after its header) is left out, so its project has no capture.
+	/// What the load's logs hold. MSBuildWorkspace numbers the log of each build host it starts
+	/// (<c>load-1.binlog</c>), so every log in the folder is read.
 	/// </summary>
-	public IReadOnlyList<CapturedArguments> Read()
+	[MethodImpl(MethodImplOptions.NoInlining)]
+	public CapturedLoad Read()
 	{
-		var captured = new List<CapturedArguments>();
-		foreach (string file in Directory.EnumerateFiles(Folder, "*.rsp"))
+		var arguments = new Dictionary<(string ProjectFile, string TargetFramework), string[]>();
+		var assetsFiles = new Dictionary<string, string>(StringComparer.Ordinal);
+		var sdkFolders = new SortedSet<string>(StringComparer.Ordinal);
+
+		foreach (string log in Directory.EnumerateFiles(Folder, "*.binlog").Order(StringComparer.Ordinal))
 		{
-			string[] lines = File.ReadAllLines(file);
-			if (lines.Length <= HeaderLines)
-				continue;
+			var targetFrameworks = new Dictionary<int, string>();
+			var replay = new BinaryLogReplayEventSource();
+			replay.AnyEventRaised += (_, e) =>
+			{
+				switch (e)
+				{
+					case ProjectStartedEventArgs { BuildEventContext: { } context } started:
+						targetFrameworks[context.ProjectInstanceId] =
+							started.GlobalProperties?.TryGetValue("TargetFramework", out string? framework) == true ? framework : "";
+						break;
 
-			var header = lines[..HeaderLines]
-				.Select(line => line.Split('=', 2))
-				.Where(parts => parts.Length == 2)
-				.ToDictionary(parts => parts[0], parts => parts[1], StringComparer.Ordinal);
-			if (!header.TryGetValue("project", out string? project) || project.Length == 0)
-				continue;
+					// The Csc task comes from sdk/<version>/Roslyn: the SDK the design-time build used.
+					case TaskStartedEventArgs { TaskName: "Csc", TaskFile: string taskFile }
+						when Path.GetDirectoryName(Path.GetDirectoryName(taskFile)) is string sdkFolder
+							&& Path.GetFileName(Path.GetDirectoryName(sdkFolder)) == "sdk":
+						sdkFolders.Add(FileStamp.NormalizePath(sdkFolder));
+						break;
 
-			captured.Add(new CapturedArguments(
-				Path.GetFullPath(project),
-				header.GetValueOrDefault("framework") ?? "",
-				header.GetValueOrDefault("assets") is { Length: > 0 } assets ? Path.GetFullPath(assets, Path.GetDirectoryName(project)!) : null,
-				header.GetValueOrDefault("extensions") is { Length: > 0 } extensions ? Path.GetFullPath(extensions, Path.GetDirectoryName(project)!) : null,
-				lines[HeaderLines..]));
+					case TaskParameterEventArgs { Kind: TaskParameterMessageKind.TaskInput, ParameterName: "ProjectAssetsFile", ProjectFile: string assetsProject } input
+						when Items(input).FirstOrDefault() is { Length: > 0 } assets:
+						assetsFiles.TryAdd(FileStamp.NormalizePath(assetsProject), FileStamp.NormalizePath(assets));
+						break;
+
+					case TaskParameterEventArgs { Kind: TaskParameterMessageKind.TaskOutput, ItemType: "CscCommandLineArgs", ProjectFile: string projectFile } output:
+						string targetFramework = output.BuildEventContext is { } outputContext
+							&& targetFrameworks.TryGetValue(outputContext.ProjectInstanceId, out string? known) ? known : "";
+						arguments[(FileStamp.NormalizePath(projectFile), targetFramework)] = Items(output);
+						break;
+				}
+			};
+			replay.Replay(log);
 		}
 
-		return captured;
+		return new CapturedLoad(
+			[.. arguments.Select(pair => new CapturedArguments(
+				pair.Key.ProjectFile,
+				pair.Key.TargetFramework,
+				assetsFiles.GetValueOrDefault(pair.Key.ProjectFile),
+				pair.Value))],
+			sdkFolders);
 	}
+
+	private static string[] Items(TaskParameterEventArgs parameter) =>
+		[.. parameter.Items.Cast<object>().Select(item => item is ITaskItem taskItem ? taskItem.ItemSpec : item.ToString() ?? "")];
 
 	public void Dispose()
 	{
@@ -122,12 +122,20 @@ internal sealed class CompilerArgumentCapture : IDisposable
 }
 
 /// <summary>
-/// The compiler arguments one design-time build of a project handed the compiler, with the restore files its
-/// evaluation imported.
+/// What one load's design-time build worked out: the compiler arguments of each project and target framework, and the
+/// SDK folders it ran from. The log has no imports or environment reads for the projects MSBuildWorkspace opens: its
+/// build host evaluates them before the build it logs, so <see cref="BuildInputs"/> names those from the files.
+/// </summary>
+internal sealed record CapturedLoad(
+	IReadOnlyList<CapturedArguments> Arguments,
+	IReadOnlySet<string> SdkFolders);
+
+/// <summary>
+/// The compiler arguments one design-time build of a project handed the compiler, with its restore output. The target
+/// framework is empty for a project that targets one.
 /// </summary>
 internal sealed record CapturedArguments(
 	string ProjectFile,
 	string TargetFramework,
 	string? ProjectAssetsFile,
-	string? ProjectExtensionsPath,
 	string[] Arguments);

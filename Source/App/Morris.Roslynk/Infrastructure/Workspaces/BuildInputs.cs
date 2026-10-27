@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Text.RegularExpressions;
 using System.Xml;
 using System.Xml.Linq;
@@ -5,117 +6,216 @@ using System.Xml.Linq;
 namespace Morris.Roslynk.Infrastructure.Workspaces;
 
 /// <summary>
-/// What a project's evaluation depended on, as far as the cache can tell: files whose content counts
-/// (<see cref="Files"/>), paths whose existence counts (<see cref="Probes"/>: a <c>Directory.Build.props</c> added
-/// above the project changes what it imports), and environment variables, which MSBuild reads as properties. A
-/// project whose inputs cannot all be named has an <see cref="Uncertain"/> reason and is not cached.
+/// What a solution's load depended on: files whose content counts (<see cref="Files"/>), paths whose existence
+/// counts (<see cref="Probes"/>: a <c>Directory.Build.props</c> added above a project changes what it imports), and
+/// environment variables, which MSBuild reads as properties. When the load may depend on something these cannot
+/// capture, <see cref="Uncertain"/> says what, and the load is not cached.
 /// </summary>
-internal sealed record BuildInputs(
+internal sealed partial record BuildInputs(
 	IReadOnlyCollection<string> Files,
 	IReadOnlyCollection<string> Probes,
 	IReadOnlyCollection<string> EnvironmentVariables,
-	string? Uncertain);
-
-/// <summary>
-/// Names a project's build inputs from its files, without MSBuild: the project file, every
-/// <c>Directory.Build.props</c>/<c>.targets</c>, <c>Directory.Packages.props</c> and <c>global.json</c> above it,
-/// the restore output its evaluation imported (<c>project.assets.json</c> and NuGet's generated
-/// <c>.nuget.g.props</c>/<c>.targets</c>, which import the packages' own build files, fixed per package version),
-/// and what those files <c>&lt;Import&gt;</c> by a path that can be worked out from the text. The SDK's own imports
-/// are covered by the SDK selection the cache records. Environment variables are those the named files mention as
-/// <c>$(Name)</c>, plus <see cref="AlwaysRecordedEnvironment"/>.
-/// <para>
-/// It cannot see what the SDK's or a package's targets read from the environment beyond that list, nor an import
-/// whose path depends on a property it cannot resolve; the latter makes the project uncertain.
-/// </para>
-/// </summary>
-internal static partial class NamedBuildInputs
+	string? Uncertain)
 {
-	/// <summary>Files MSBuild, the SDK and NuGet look for in each folder above a project.</summary>
+	/// <summary>Files MSBuild, the SDK and NuGet look for in each folder above a project, read only where they exist.</summary>
 	private static readonly string[] AncestorFiles = ["Directory.Build.props", "Directory.Build.targets", "Directory.Packages.props", "global.json"];
 
-	/// <summary>Environment variables that steer MSBuild, SDK selection or restore, and common properties that may be set from the environment.</summary>
-	internal static readonly string[] AlwaysRecordedEnvironment =
+	/// <summary>Environment variables that steer MSBuild, SDK selection or restore without a build file naming them.</summary>
+	private static readonly string[] AlwaysRecordedEnvironment =
 	[
-		"Configuration", "Platform", "TargetFramework", "TargetFrameworks", "RuntimeIdentifier", "LangVersion", "Nullable",
-		"DefineConstants", "TreatWarningsAsErrors", "WarningsAsErrors", "NoWarn",
 		"MSBuildSDKsPath", "MSBuildExtensionsPath", "MSBuildUserExtensionsPath", "MSBUILD_EXE_PATH",
 		"DOTNET_ROOT", "DOTNET_HOST_PATH", "DOTNET_MSBUILD_SDK_RESOLVER_SDKS_DIR", "DOTNET_MSBUILD_SDK_RESOLVER_SDKS_VER",
 		"NUGET_PACKAGES",
-		"CustomBeforeMicrosoftCommonProps", "CustomAfterMicrosoftCommonProps",
-		"CustomBeforeMicrosoftCommonTargets", "CustomAfterMicrosoftCommonTargets",
 	];
 
-	public static BuildInputs Of(CapturedArguments captured)
+	/// <summary>The names each SDK folder's build files mention, scanned once per process.</summary>
+	private static readonly ConcurrentDictionary<string, string[]> SdkNames = new(StringComparer.Ordinal);
+
+	/// <summary>
+	/// The inputs of a load, named from the files rather than from MSBuild, which evaluates in its own process:
+	/// <list type="bullet">
+	/// <item>the solution file and each project file;</item>
+	/// <item>every <c>Directory.Build.props</c>/<c>.targets</c>, <c>Directory.Packages.props</c> and <c>global.json</c>
+	/// above a project, and whether one exists where there is none;</item>
+	/// <item>what those files <c>&lt;Import&gt;</c> by a path that can be worked out from the text;</item>
+	/// <item>restore's output: <c>project.assets.json</c> and NuGet's <c>.nuget.g.props</c>/<c>.targets</c> beside it,
+	/// which import the packages' build files by version, so a changed package changes them;</item>
+	/// <item>every environment variable named as <c>$(Name)</c> or <c>GetEnvironmentVariable('Name')</c> in those files,
+	/// in the packages' build files they import, or in the SDK's own (<paramref name="sdkFolders"/>), plus
+	/// <see cref="AlwaysRecordedEnvironment"/>. A variable is recorded whether it is set or not, so setting one counts.</item>
+	/// </list>
+	/// The load is uncertain when one of the solution's own files imports a path that depends on more than its text,
+	/// or reads files (<c>ReadLinesFromFile</c>, <c>XmlPeek</c>, <c>JsonPeek</c>, <c>System.IO.File</c>), which nothing
+	/// records. The SDK's own imports are covered by the SDK selection the cache records, and packages' by their
+	/// version.
+	/// </summary>
+	public static BuildInputs Of(string solutionPath, IEnumerable<CapturedArguments> captures, IEnumerable<string> sdkFolders)
 	{
-		var files = new SortedSet<string>(StringComparer.Ordinal);
+		var files = new SortedSet<string>(StringComparer.Ordinal) { FileStamp.NormalizePath(solutionPath) };
 		var probes = new SortedSet<string>(StringComparer.Ordinal);
 		var environment = new SortedSet<string>(AlwaysRecordedEnvironment, StringComparer.Ordinal);
-		var pending = new Queue<string>();
+		var packageFiles = new SortedSet<string>(StringComparer.Ordinal);
+		var pending = new Queue<(string File, string ProjectFile)>();
 
-		void Add(string path, bool parse)
+		void Add(string path, string projectFile, bool parse)
 		{
 			probes.Add(path);
 			if (File.Exists(path) && files.Add(path) && parse)
-				pending.Enqueue(path);
+				pending.Enqueue((path, projectFile));
 		}
 
-		Add(captured.ProjectFile, parse: true);
-		for (DirectoryInfo? directory = new FileInfo(captured.ProjectFile).Directory; directory is not null; directory = directory.Parent)
+		foreach (string probe in Ancestors(Path.GetDirectoryName(Path.GetFullPath(solutionPath))!, "global.json"))
+			Add(probe, solutionPath, parse: false);
+
+		foreach (CapturedArguments captured in captures.DistinctBy(c => c.ProjectFile, StringComparer.Ordinal))
 		{
+			string projectFile = captured.ProjectFile;
+			Add(projectFile, projectFile, parse: true);
 			foreach (string name in AncestorFiles)
-				Add(Path.Combine(directory.FullName, name), parse: name != "global.json");
-		}
-
-		// Restore's output: the assets file, and the imports NuGet generates, which name the packages' build files by
-		// version, so a changed package changes them.
-		if (captured.ProjectAssetsFile is string assets)
-			Add(assets, parse: false);
-		if (captured.ProjectExtensionsPath is string extensions)
-		{
-			string projectFileName = Path.GetFileName(captured.ProjectFile);
-			Add(Path.Combine(extensions, $"{projectFileName}.nuget.g.props"), parse: false);
-			Add(Path.Combine(extensions, $"{projectFileName}.nuget.g.targets"), parse: false);
-		}
-
-		while (pending.TryDequeue(out string? file))
-		{
-			XDocument document;
-			string text;
-			try
 			{
-				text = File.ReadAllText(file);
-				document = XDocument.Parse(text);
-			}
-			catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or XmlException)
-			{
-				return new BuildInputs(files, probes, environment, $"{Path.GetFileName(file)} could not be read ({exception.Message})");
+				foreach (string probe in Ancestors(Path.GetDirectoryName(projectFile)!, name))
+					Add(probe, projectFile, parse: name != "global.json");
 			}
 
-			foreach (Match match in PropertyReference().Matches(text))
-				environment.Add(match.Groups["name"].Value);
-
-			foreach (XElement import in document.Descendants().Where(element => element.Name.LocalName == "Import"))
+			string restoreFolder = captured.ProjectAssetsFile is string assets
+				? Path.GetDirectoryName(assets)!
+				: Path.Combine(Path.GetDirectoryName(projectFile)!, "obj");
+			Add(captured.ProjectAssetsFile ?? Path.Combine(restoreFolder, "project.assets.json"), projectFile, parse: false);
+			foreach (string extension in (string[])[".nuget.g.props", ".nuget.g.targets"])
 			{
-				// An SDK's own files come with the SDK, recorded as the SDK selection.
-				if (import.Attribute("Sdk") is not null)
-					continue;
+				string generated = Path.Combine(restoreFolder, Path.GetFileName(projectFile) + extension);
+				Add(generated, projectFile, parse: false);
+				foreach (string package in PackageImports(generated))
+					packageFiles.Add(package);
+			}
+		}
 
-				string project = (string?)import.Attribute("Project") ?? "";
-				switch (Resolve(project, file, captured.ProjectFile))
+		while (pending.TryDequeue(out (string File, string ProjectFile) next))
+		{
+			if (Parse(next.File) is not (XDocument document, string text))
+				return new BuildInputs(files, probes, environment, $"{next.File} could not be read");
+
+			if (ReadsFiles(text) is string how)
+				return new BuildInputs(files, probes, environment, $"{next.File} reads files ({how}), which the cache cannot track");
+
+			environment.UnionWith(Names(text));
+			foreach (string project in Imports(document))
+			{
+				switch (Resolve(project, next.File, next.ProjectFile))
 				{
 					case Resolved.Covered:
 						break;
 					case Resolved.Path { Value: string path }:
-						Add(path, parse: true);
+						Add(path, next.ProjectFile, parse: true);
 						break;
 					default:
-						return new BuildInputs(files, probes, environment, $"{Path.GetFileName(file)} imports '{project}', whose path depends on more than its text");
+						return new BuildInputs(files, probes, environment, $"{next.File} imports '{project}', whose path depends on more than its text");
 				}
 			}
 		}
 
+		// Packages' build files are fixed per version, which the restore output records; only the variables they read
+		// are taken from them, following their own imports where the path can be worked out.
+		var scanned = new HashSet<string>(StringComparer.Ordinal);
+		var packagePending = new Queue<string>(packageFiles);
+		while (packagePending.TryDequeue(out string? packageFile))
+		{
+			if (!scanned.Add(packageFile) || Parse(packageFile) is not (XDocument document, string text))
+				continue;
+
+			environment.UnionWith(Names(text));
+			foreach (string project in Imports(document))
+			{
+				if (Resolve(project, packageFile, packageFile) is Resolved.Path { Value: string path } && File.Exists(path))
+					packagePending.Enqueue(path);
+			}
+		}
+
+		foreach (string sdkFolder in sdkFolders)
+			environment.UnionWith(SdkNames.GetOrAdd(sdkFolder, ScanFolder));
+
 		return new BuildInputs(files, probes, environment, null);
+	}
+
+	/// <summary>The path of a file with this name in the folder and in every folder above it.</summary>
+	private static IEnumerable<string> Ancestors(string folder, string name)
+	{
+		for (DirectoryInfo? directory = new(folder); directory is not null; directory = directory.Parent)
+			yield return Path.Combine(directory.FullName, name);
+	}
+
+	private static (XDocument Document, string Text)? Parse(string file)
+	{
+		try
+		{
+			string text = File.ReadAllText(file);
+			return (XDocument.Parse(text), text);
+		}
+		catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or XmlException)
+		{
+			return null;
+		}
+	}
+
+	/// <summary>The <c>Project</c> of each <c>Import</c> that is not an SDK's own; an SDK's files come with the SDK.</summary>
+	private static IEnumerable<string> Imports(XDocument document) =>
+		document.Descendants()
+			.Where(element => element.Name.LocalName == "Import" && element.Attribute("Sdk") is null)
+			.Select(element => (string?)element.Attribute("Project") ?? "");
+
+	/// <summary>The package build files NuGet's generated import file imports, with <c>$(NuGetPackageRoot)</c> resolved.</summary>
+	private static IEnumerable<string> PackageImports(string generated)
+	{
+		if (Parse(generated) is not (XDocument document, _))
+			return [];
+
+		string? root = document.Descendants().FirstOrDefault(element => element.Name.LocalName == "NuGetPackageRoot")?.Value;
+		if (string.IsNullOrEmpty(root))
+			return [];
+
+		return Imports(document)
+			.Where(project => project.StartsWith("$(NuGetPackageRoot)", StringComparison.OrdinalIgnoreCase))
+			.Select(project => Path.GetFullPath(Path.Combine(root, project["$(NuGetPackageRoot)".Length..].Replace('\\', Path.DirectorySeparatorChar))))
+			.Where(File.Exists);
+	}
+
+	/// <summary>The names of the SDK's build files, which can read any environment variable as a property.</summary>
+	private static string[] ScanFolder(string folder)
+	{
+		var names = new HashSet<string>(StringComparer.Ordinal);
+		if (!Directory.Exists(folder))
+			return [];
+
+		foreach (string file in Directory.EnumerateFiles(folder, "*", SearchOption.AllDirectories))
+		{
+			if (Path.GetExtension(file).ToLowerInvariant() is not (".props" or ".targets" or ".tasks" or ".proj"))
+				continue;
+
+			try
+			{
+				names.UnionWith(Names(File.ReadAllText(file)));
+			}
+			catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+			{
+			}
+		}
+
+		return [.. names];
+	}
+
+	private static IEnumerable<string> Names(string text) =>
+		PropertyReference().Matches(text).Select(match => match.Groups["name"].Value)
+			.Concat(EnvironmentRead().Matches(text).Select(match => match.Groups["name"].Value));
+
+	private static string? ReadsFiles(string text)
+	{
+		foreach (string marker in (string[])["ReadLinesFromFile", "XmlPeek", "JsonPeek", "System.IO.File]::"])
+		{
+			if (text.Contains(marker, StringComparison.OrdinalIgnoreCase))
+				return marker.TrimEnd(']', ':');
+		}
+
+		return null;
 	}
 
 	private abstract record Resolved
@@ -139,8 +239,8 @@ internal static partial class NamedBuildInputs
 		if (above.Success)
 			return AncestorFiles.Contains(above.Groups["name"].Value, StringComparer.OrdinalIgnoreCase) ? new Resolved.Covered() : new Resolved.Unknown();
 
-		string thisDirectory = Path.GetDirectoryName(importingFile)! + Path.DirectorySeparatorChar;
-		string projectDirectory = Path.GetDirectoryName(projectFile)!;
+		string thisDirectory = System.IO.Path.GetDirectoryName(importingFile)! + System.IO.Path.DirectorySeparatorChar;
+		string projectDirectory = System.IO.Path.GetDirectoryName(projectFile)!;
 		string path = project
 			.Replace("$(MSBuildThisFileDirectory)", thisDirectory, StringComparison.OrdinalIgnoreCase)
 			.Replace("$(MSBuildProjectDirectory)", projectDirectory, StringComparison.OrdinalIgnoreCase)
@@ -150,11 +250,14 @@ internal static partial class NamedBuildInputs
 			|| path.Contains("%(", StringComparison.Ordinal) || path.IndexOfAny(['*', '?', ';']) >= 0)
 			return new Resolved.Unknown();
 
-		return new Resolved.Path(Path.GetFullPath(path.Replace('\\', Path.DirectorySeparatorChar), Path.GetDirectoryName(importingFile)!));
+		return new Resolved.Path(System.IO.Path.GetFullPath(path.Replace('\\', System.IO.Path.DirectorySeparatorChar), System.IO.Path.GetDirectoryName(importingFile)!));
 	}
 
 	[GeneratedRegex(@"\$\((?<name>[A-Za-z_][A-Za-z0-9_\-]*)\)")]
 	private static partial Regex PropertyReference();
+
+	[GeneratedRegex(@"GetEnvironmentVariable\(\s*['""](?<name>[^'""]+)['""]")]
+	private static partial Regex EnvironmentRead();
 
 	[GeneratedRegex(@"^\s*\$\(\[MSBuild\]::GetPathOfFileAbove\(\s*'(?<name>[^']+)'\s*(,\s*'[^']*'\s*)?\)\)\s*$", RegexOptions.IgnoreCase)]
 	private static partial Regex PathOfFileAbove();
