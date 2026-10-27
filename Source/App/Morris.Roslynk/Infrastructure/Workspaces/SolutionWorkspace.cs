@@ -49,10 +49,13 @@ public sealed class SolutionWorkspace : IDisposable
 	public TrackedAnalyzers TrackedAnalyzers { get; }
 
 	/// <summary>
-	/// Whether the solution was built from the compiler command lines a build kept (<see cref="CompilerCommandLineLoad"/>)
-	/// rather than through MSBuild.
+	/// Whether the solution was rebuilt from compiler arguments an earlier load captured (<see cref="CompilerArgumentCache"/>)
+	/// rather than loaded through MSBuild.
 	/// </summary>
-	public bool LoadedFromCompilerCommandLines { get; private init; }
+	public bool LoadedFromCache { get; private init; }
+
+	/// <summary>Why a load did not use or did not fill the compiler argument cache, on its trace span.</summary>
+	private const string ReasonTag = "roslynk.load.cache_reason";
 
 	/// <summary>The in-process Razor generation for this workspace's solution, for regenerating after edits.</summary>
 	public RazorGenerationState Razor { get; }
@@ -73,11 +76,17 @@ public sealed class SolutionWorkspace : IDisposable
 		Razor = razor;
 	}
 
-	public static async Task<SolutionWorkspace> LoadAsync(
+	public static Task<SolutionWorkspace> LoadAsync(
 		string solutionPath,
 		IProgress<ProjectLoadProgress>? progress = null,
-		CancellationToken cancellationToken = default,
-		bool useCompilerCommandLines = false)
+		CancellationToken cancellationToken = default) =>
+		LoadAsync(solutionPath, CompilerArgumentCache.Default, progress, cancellationToken);
+
+	internal static async Task<SolutionWorkspace> LoadAsync(
+		string solutionPath,
+		CompilerArgumentCache cache,
+		IProgress<ProjectLoadProgress>? progress = null,
+		CancellationToken cancellationToken = default)
 	{
 		if (solutionPath is null)
 			throw new ArgumentNullException(nameof(solutionPath));
@@ -94,27 +103,32 @@ public sealed class SolutionWorkspace : IDisposable
 				MsBuildRegistrar.EnsureRegistered();
 			}
 
-			// A build that kept each project's compiler command line has already worked out what a design-time
-			// build would; loading from those files takes seconds where MSBuild takes about a quarter of a second
-			// per project. Anything they cannot describe loads through MSBuild as before.
-			var commandLineWorkspace = new AdhocWorkspace();
-			Solution? fromCommandLines = null;
-			if (useCompilerCommandLines)
+			// A design-time build of every project takes about a quarter of a second each; an earlier load's compiler
+			// arguments rebuild the solution in a fraction of that while nothing they came from has changed.
+			var cachedWorkspace = new AdhocWorkspace();
+			CachedLoad? cached;
+			using (Activity? cacheActivity = RoslynkActivitySource.Instance.StartActivity("compiler_argument_cache_load"))
 			{
-				using Activity? commandLineActivity = RoslynkActivitySource.Instance.StartActivity("compiler_command_line_load");
-				fromCommandLines = CompilerCommandLineLoad.TryLoad(commandLineWorkspace, solutionPath, out string fallbackReason);
-				commandLineActivity?.SetTag("roslynk.load.fallback_reason", fallbackReason);
+				cached = cache.TryLoad(cachedWorkspace, solutionPath, out string reason);
+				cacheActivity?.SetTag(ReasonTag, reason);
 			}
 
-			if (fromCommandLines is not null)
+			if (cached is not null)
 			{
-				loadActivity?.SetTag(ActivityTags.ProjectCountTag, fromCommandLines.Projects.Count());
-				return await CompleteAsync(commandLineWorkspace, fromCommandLines, solutionPath, loadDiagnostics, [], loadedFromCompilerCommandLines: true, cancellationToken);
+				foreach (string diagnostic in cached.LoadDiagnostics)
+					loadDiagnostics.Add(diagnostic);
+
+				loadActivity?.SetTag(ActivityTags.ProjectCountTag, cached.Solution.Projects.Count());
+				return await CompleteAsync(cachedWorkspace, cached.Solution, solutionPath, loadDiagnostics, cached.LoadWarnings, loadedFromCache: true, cancellationToken);
 			}
 
-			commandLineWorkspace.Dispose();
+			cachedWorkspace.Dispose();
 
-			MSBuildWorkspace workspace = MSBuildWorkspace.Create();
+			using CompilerArgumentCapture? capture = cache.BeginCapture(solutionPath, out string captureReason);
+			loadActivity?.SetTag(ReasonTag, captureReason);
+			DateTime loadStartedUtc = DateTime.UtcNow;
+
+			MSBuildWorkspace workspace = MSBuildWorkspace.Create(capture?.GlobalProperties ?? new Dictionary<string, string>());
 			Solution solution;
 
 			using (workspace.RegisterWorkspaceFailedHandler(e => workspaceFailures.Add(e.Diagnostic)))
@@ -184,8 +198,15 @@ public sealed class SolutionWorkspace : IDisposable
 						loadDiagnostics.Add(failure);
 				}
 
+				if (capture is not null)
+				{
+					using Activity? storeActivity = RoslynkActivitySource.Instance.StartActivity("compiler_argument_cache_store");
+					string? notStored = cache.Store(capture, solutionPath, solution, [.. loadDiagnostics], loadWarnings, loadStartedUtc);
+					storeActivity?.SetTag(ReasonTag, notStored ?? "");
+				}
+
 				loadActivity?.SetTag(ActivityTags.ProjectCountTag, solution.Projects.Count());
-				return await CompleteAsync(workspace, solution, solutionPath, loadDiagnostics, loadWarnings, loadedFromCompilerCommandLines: false, cancellationToken);
+				return await CompleteAsync(workspace, solution, solutionPath, loadDiagnostics, loadWarnings, loadedFromCache: false, cancellationToken);
 			}
 		}
 	}
@@ -200,7 +221,7 @@ public sealed class SolutionWorkspace : IDisposable
 		string solutionPath,
 		ConcurrentBag<string> loadDiagnostics,
 		IReadOnlyList<string> loadWarnings,
-		bool loadedFromCompilerCommandLines,
+		bool loadedFromCache,
 		CancellationToken cancellationToken)
 	{
 		// Shadow-copy remap MUST precede the Razor augmentation: AugmentAsync requests compilations,
@@ -223,7 +244,7 @@ public sealed class SolutionWorkspace : IDisposable
 
 		return new SolutionWorkspace(workspace, solution, loadDiagnostics.ToArray(), loadWarnings, trackedAnalyzers, razor)
 		{
-			LoadedFromCompilerCommandLines = loadedFromCompilerCommandLines,
+			LoadedFromCache = loadedFromCache,
 		};
 	}
 

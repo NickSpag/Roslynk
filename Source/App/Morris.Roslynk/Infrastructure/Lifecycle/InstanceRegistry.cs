@@ -1,4 +1,3 @@
-using Microsoft.CodeAnalysis.MSBuild;
 using Morris.Roslynk.Infrastructure.Diagnostics;
 using Morris.Roslynk.Infrastructure.Observability;
 using Morris.Roslynk.Infrastructure.Watching;
@@ -18,17 +17,11 @@ public sealed class InstanceRegistry : IDisposable
 {
 	private readonly ConcurrentDictionary<SolutionKey, Lazy<RoslynInstance>> Instances = new();
 	private readonly LoadWaitTimeout LoadWaitTimeout;
-	private readonly CompilerCommandLineLoading CompilerCommandLineLoading;
 
-	public InstanceRegistry(LoadWaitTimeout? loadWaitTimeout = null, CompilerCommandLineLoading? compilerCommandLineLoading = null)
+	public InstanceRegistry(LoadWaitTimeout? loadWaitTimeout = null)
 	{
 		LoadWaitTimeout = loadWaitTimeout ?? LoadWaitTimeout.Default;
-		CompilerCommandLineLoading = compilerCommandLineLoading ?? CompilerCommandLineLoading.Default;
 	}
-
-	/// <summary>Loads a solution as this registry is configured to.</summary>
-	private Task<SolutionWorkspace> Load(string solutionPath, IProgress<ProjectLoadProgress> progress) =>
-		SolutionWorkspace.LoadAsync(solutionPath, progress, useCompilerCommandLines: CompilerCommandLineLoading.Enabled);
 
 	/// <summary>The file paths of the solutions currently open, whether they are loading, ready, or faulted.</summary>
 	public IReadOnlyList<string> OpenSolutionPaths => Instances.Keys.Select(key => key.FilePath).ToArray();
@@ -76,7 +69,7 @@ public sealed class InstanceRegistry : IDisposable
 
 			// BeginRebuild clears the dirty flag immediately, so concurrent or repeat reads queue at most one reload.
 			if (instance.IsDirty && instance.CurrentModel.Solution is not null)
-				instance.BeginRebuild(progress => Load(key.FilePath, progress), AttachWatcher);
+				instance.BeginRebuild(progress => SolutionWorkspace.LoadAsync(key.FilePath, progress), AttachWatcher);
 
 			instance.Touch();
 			return instance;
@@ -106,7 +99,7 @@ public sealed class InstanceRegistry : IDisposable
 
 			using (RoslynkActivitySource.Instance.StartActivity($"{nameof(RoslynInstance)}.{nameof(RoslynInstance.EnsureRebuiltAsync)}"))
 			{
-				await instance.EnsureRebuiltAsync(progress => Load(key.FilePath, progress), AttachWatcher);
+				await instance.EnsureRebuiltAsync(progress => SolutionWorkspace.LoadAsync(key.FilePath, progress), AttachWatcher);
 			}
 
 			// Build output is invisible to the watcher, so a generator DLL built or rebuilt since the last use is
@@ -145,11 +138,11 @@ public sealed class InstanceRegistry : IDisposable
 		return lazy.Value;
 	}
 
-	private RoslynInstance CreateAndBeginLoad(SolutionKey key)
+	private static RoslynInstance CreateAndBeginLoad(SolutionKey key)
 	{
 		var instance = new RoslynInstance(key);
 		instance.BeginInitialLoad(
-			loader: progress => Load(key.FilePath, progress),
+			loader: progress => SolutionWorkspace.LoadAsync(key.FilePath, progress),
 			onReady: AttachWatcher);
 		return instance;
 	}
@@ -202,7 +195,7 @@ public sealed class InstanceRegistry : IDisposable
 		RoslynInstance instance = GetOrCreate(key);
 
 		if (instance.CurrentModel.Solution is not null)
-			instance.BeginRebuild(progress => Load(key.FilePath, progress), AttachWatcher);
+			instance.BeginRebuild(progress => SolutionWorkspace.LoadAsync(key.FilePath, progress), AttachWatcher);
 
 		instance.Touch();
 		return instance;

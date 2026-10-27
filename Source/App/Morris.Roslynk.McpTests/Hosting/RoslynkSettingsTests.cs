@@ -1,7 +1,6 @@
 using Microsoft.Extensions.Configuration;
 using Morris.Roslynk.Infrastructure.Lifecycle;
 using Morris.Roslynk.Infrastructure.Outlines;
-using Morris.Roslynk.Infrastructure.Workspaces;
 using Morris.Roslynk.Mcp.Hosting;
 
 namespace Morris.Roslynk.McpTests.Hosting;
@@ -27,7 +26,6 @@ public class RoslynkSettingsTests
 		Assert.Null(settings.IdleEvictionMinutes);
 		Assert.Null(settings.EvictionCheckMinutes);
 		Assert.Null(settings.Port);
-		Assert.Null(settings.LoadFromCompilerCommandLines);
 	}
 
 	[Fact]
@@ -103,18 +101,6 @@ public class RoslynkSettingsTests
 	public void WhenEvictionCheckMinutesIsBelowTheFloor_ThenOneMinuteApplies()
 	{
 		Assert.Equal(TimeSpan.FromMinutes(1), Bind(("EvictionCheckMinutes", "0")).EffectiveEvictionCheckInterval);
-	}
-
-	[Fact]
-	public void WhenLoadFromCompilerCommandLinesIsAbsent_ThenLoadsDoNotUseThem()
-	{
-		Assert.False(Bind().EffectiveCompilerCommandLineLoading.Enabled);
-	}
-
-	[Fact]
-	public void WhenLoadFromCompilerCommandLinesIsTrue_ThenLoadsUseThem()
-	{
-		Assert.True(Bind(("LoadFromCompilerCommandLines", "true")).EffectiveCompilerCommandLineLoading.Enabled);
 	}
 
 	[Fact]

@@ -267,48 +267,12 @@ internal static class TestSolutions
 	public static void BuildScratchGenerator(string solutionPath) =>
 		Build(Path.Combine(Path.GetDirectoryName(solutionPath)!, "GeneratorLib", "GeneratorLib.csproj"));
 
-	/// <summary>
-	/// The MSBuild target a build uses to keep each project's compiler command line, one argument per line, in
-	/// <c>obj/&lt;configuration&gt;/&lt;framework&gt;/&lt;project file&gt;.csc.rsp</c>, as
-	/// <see cref="Morris.Roslynk.Infrastructure.Workspaces.CompilerCommandLineLoad"/> reads it.
-	/// </summary>
-	public const string KeepCompilerCommandLineTargets = """
-		<Project>
-		  <PropertyGroup>
-		    <ProvideCommandLineArgs>true</ProvideCommandLineArgs>
-		  </PropertyGroup>
-		  <Target Name="KeepCompilerCommandLine" AfterTargets="CoreCompile"
-		          Condition="'$(DesignTimeBuild)' != 'true' and '@(CscCommandLineArgs)' != ''">
-		    <WriteLinesToFile File="$(IntermediateOutputPath)$(MSBuildProjectFile).csc.rsp"
-		                      Lines="@(CscCommandLineArgs)" Overwrite="true" />
-		  </Target>
-		</Project>
-		""";
+	/// <summary>A scratch copy of a fixture, restored and not built, at <paramref name="solutionFile"/> within it.</summary>
+	public static string CreateScratchFixture(string fixtureName, string solutionFile) => CreateScratch(fixtureName, solutionFile);
 
 	/// <summary>
-	/// A scratch copy of a fixture built (Debug) with <see cref="KeepCompilerCommandLineTargets"/> as its
-	/// Directory.Build.targets, so every project has a current kept command line.
-	/// </summary>
-	public static string CreateScratchBuiltWithCompilerCommandLines(string fixtureName, string solutionFile)
-	{
-		string path = CreateScratch(fixtureName, solutionFile);
-		BuildKeepingCompilerCommandLines(path);
-		return path;
-	}
-
-	/// <summary>
-	/// Builds (Debug) a solution with <see cref="KeepCompilerCommandLineTargets"/> as the Directory.Build.targets
-	/// beside it.
-	/// </summary>
-	public static void BuildKeepingCompilerCommandLines(string solutionPath)
-	{
-		File.WriteAllText(Path.Combine(Path.GetDirectoryName(solutionPath)!, "Directory.Build.targets"), KeepCompilerCommandLineTargets);
-		Build(solutionPath);
-	}
-
-	/// <summary>
-	/// A two-project solution written to a fresh temp directory and built keeping each compiler command line: Lib
-	/// targets net8.0 and net10.0, and App (net10.0) references it.
+	/// A two-project solution written to a fresh temp directory and restored, not built: Lib targets net8.0 and
+	/// net10.0, with RootNamespace Linked.Library, and App (net10.0) references it.
 	/// </summary>
 	public static string CreateScratchLinkedSolution()
 	{
@@ -345,12 +309,6 @@ internal static class TestSolutions
 
 		string solutionPath = Path.Combine(root, "LinkedSolution.slnx");
 		Restore(solutionPath);
-		// Lib, then App, rather than the solution: a solution build can build Lib for App's reference while it
-		// builds Lib itself, and the two then race to write the same deps.json. Without restoring again, which would
-		// rewrite Lib's project.assets.json after Lib's command line was kept.
-		File.WriteAllText(Path.Combine(root, "Directory.Build.targets"), KeepCompilerCommandLineTargets);
-		RunDotnet("build --no-restore", Path.Combine(root, "Lib", "Lib.csproj"));
-		RunDotnet("build --no-restore", Path.Combine(root, "App", "App.csproj"));
 		return solutionPath;
 	}
 
