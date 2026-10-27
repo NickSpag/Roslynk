@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Solutions open in the same daemon share one metadata reference per referenced DLL, so a second checkout of a repository reuses the first's symbols for every NuGet and framework assembly instead of loading and decoding each again (686 MB less for a second worktree of a 133-project solution) (Fixes #TBD)
 - OpenTelemetry span and metric tag values are recorded in full instead of being silently capped at 64 characters, so `mcp.tool.arg.*` tool-call arguments, `roslynk.solution.path`, `roslynk.symbol.name` and `roslynk.file.path` are usable in Aspire (Fixes #172)
 - Opening a solution again reuses each project's compiler arguments, captured during the previous MSBuild load, instead of running a design-time build of every project, until a project, build, restore or environment input or the set of source files changes; the cache is under local application data, in `Roslynk/CompilerArguments` (Fixes #170)
 - Read-only tools run through a shared snapshot guard that returns `error=Stale` (with the current `snapshot=<id>`) when the solution changes mid-query or the query is cancelled, and `multi_query` rejects the whole batch rather than mixing generations; write tools stay on the write pipeline (Fixes #165)
