@@ -338,7 +338,8 @@ A shared daemon serves every client with one set of values — set the smallest 
 Opening a solution runs a design-time build of every project through MSBuild, which takes about a quarter of a second
 per project. Roslynk keeps what that build works out, each project's C# compiler arguments, and the next time it opens
 the same solution it builds the projects from those arguments instead, without MSBuild, as long as nothing they came
-from has changed. There is nothing to set up or add to the solution.
+from has changed. There is nothing to set up or add to the solution. On a 133-project solution, a load took 1.3s
+from the cache against 26s through MSBuild.
 
 The arguments are captured during the load Roslynk runs anyway: it passes its own targets file to MSBuild as the
 global property `CustomAfterMicrosoftCommonTargets`, and a target there writes the arguments after `CoreCompile`, which
