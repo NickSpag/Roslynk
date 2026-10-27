@@ -215,8 +215,8 @@ public sealed class SolutionWorkspace : IDisposable
 	}
 
 	/// <summary>
-	/// What every load does once it has a solution: analyzer references moved to the shadow-copying loader, then
-	/// Razor's generated documents added.
+	/// What every load does once it has a solution: file references swapped for the process-wide ones, analyzer
+	/// references moved to the shadow-copying loader, then Razor's generated documents added.
 	/// </summary>
 	private static async Task<SolutionWorkspace> CompleteAsync(
 		Workspace workspace,
@@ -227,6 +227,9 @@ public sealed class SolutionWorkspace : IDisposable
 		bool loadedFromCache,
 		CancellationToken cancellationToken)
 	{
+		// Before anything compiles, so every compilation binds against the shared references' symbols.
+		solution = SharedMetadataReferences.Share(solution);
+
 		// Shadow-copy remap MUST precede the Razor augmentation: AugmentAsync requests compilations,
 		// which run source generators and therefore load every analyzer reference. If the references
 		// still use MSBuildWorkspace's default loader at that point, the originals in bin/obj get
